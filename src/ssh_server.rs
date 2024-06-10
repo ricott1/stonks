@@ -82,10 +82,6 @@ impl AppServer {
         }
     }
 
-    pub async fn tick(&self) {
-        (*self.app.lock().await).tick();
-    }
-
     pub async fn run(&mut self) -> AppResult<()> {
         println!("Starting SSH server. Press Ctrl-C to exit.");
         let clients = self.clients.clone();
@@ -101,7 +97,8 @@ impl AppServer {
                 let mut app = app.lock().await;
 
                 app.tick();
-                info!("Last tick {:6}, {:4} clients", app.last_tick, clients.len());
+                println!("Last tick {:6}, {:4} clients", app.last_tick, clients.len());
+                println!("Stonks prices {}", app.stonks[0].historical_prices.len());
 
                 for (id, tui) in clients.iter_mut() {
                     tui.draw(&mut ui, &app)
