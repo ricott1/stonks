@@ -50,6 +50,9 @@ async fn main() -> AppResult<()> {
     );
 
     println!("Started App with {} stonks!", app.stonks.len());
+    for _ in 0..app.historical_size {
+        app.tick();
+    }
 
     AppServer::new(app).run().await?;
 

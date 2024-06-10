@@ -20,7 +20,7 @@ pub struct App {
 
 impl App {
     pub fn new() -> Self {
-        let mut app = App {
+        App {
             stonks: vec![],
             last_tick: 1,
             historical_size: 500,
@@ -28,12 +28,7 @@ impl App {
             phase: GamePhase::Day {
                 counter: PHASE_LENGTH,
             },
-        };
-
-        for _ in 0..app.historical_size {
-            app.tick();
         }
-        app
     }
 
     pub fn new_stonk(

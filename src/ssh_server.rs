@@ -97,8 +97,6 @@ impl AppServer {
                 let mut app = app.lock().await;
 
                 app.tick();
-                println!("Last tick {:6}, {:4} clients", app.last_tick, clients.len());
-                println!("Stonks prices {}", app.stonks[0].historical_prices.len());
 
                 for (id, tui) in clients.iter_mut() {
                     tui.draw(&mut ui, &app)
