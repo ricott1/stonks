@@ -33,7 +33,7 @@ async fn main() -> AppResult<()> {
         0.01,
     );
     let rovanti = Stonk::new(
-        1,
+        2,
         StonkClass::Commodity,
         "Rovanti".into(),
         80.0,
@@ -42,7 +42,7 @@ async fn main() -> AppResult<()> {
         0.005,
     );
     let riccardino = Stonk::new(
-        1,
+        3,
         StonkClass::Technology,
         "Riccardino".into(),
         90.0,
