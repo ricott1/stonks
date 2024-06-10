@@ -49,6 +49,8 @@ async fn main() -> AppResult<()> {
         0.01,
     );
 
+    println!("Started App with {} stonks!", app.stonks.len());
+
     AppServer::new(app).run().await?;
 
     Ok(())
