@@ -19,9 +19,9 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(stonks: Vec<Stonk>) -> Self {
+    pub fn new() -> Self {
         let mut app = App {
-            stonks,
+            stonks: vec![],
             last_tick: 1,
             historical_size: 500,
             global_trend: 0.0,
@@ -36,7 +36,30 @@ impl App {
         app
     }
 
-    fn tick_day(&mut self) {
+    pub fn new_stonk(
+        &mut self,
+        class: StonkClass,
+        name: String,
+        price_per_share: f64,
+        number_of_shares: u16,
+        drift: f64,
+        volatility: f64,
+    ) {
+        let s = Stonk {
+            id: self.stonks.len(),
+            class,
+            name,
+            price_per_share,
+            number_of_shares,
+            drift,
+            volatility: volatility.max(0.001).min(0.99),
+            historical_prices: vec![price_per_share],
+            average: price_per_share,
+        };
+        self.stonks.push(s);
+    }
+
+    pub fn tick_day(&mut self) {
         let rng = &mut rand::thread_rng();
         if self.last_tick % 120 == 0 {
             self.global_trend = rng.gen_range(-0.2..0.2);
@@ -128,28 +151,6 @@ pub struct Stonk {
 }
 
 impl Stonk {
-    pub fn new(
-        id: usize,
-        class: StonkClass,
-        name: String,
-        price_per_share: f64,
-        number_of_shares: u16,
-        drift: f64,
-        volatility: f64,
-    ) -> Self {
-        Stonk {
-            id,
-            class,
-            name,
-            price_per_share,
-            number_of_shares,
-            drift,
-            volatility: volatility.max(0.001).min(0.99),
-            historical_prices: vec![price_per_share],
-            average: price_per_share,
-        }
-    }
-
     pub fn data(&self, x_ticks: Vec<f64>) -> Vec<(f64, f64)> {
         x_ticks
             .iter()

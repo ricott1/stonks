@@ -1,6 +1,6 @@
 use stonks::{
     ssh_server::AppServer,
-    stonk::{App, Stonk, StonkClass},
+    stonk::{App, StonkClass},
     utils::AppResult,
 };
 use tracing::metadata::LevelFilter;
@@ -14,8 +14,9 @@ async fn main() -> AppResult<()> {
         .with_file(true)
         .init();
 
-    let cassius_inc = Stonk::new(
-        0,
+    let mut app = App::new();
+
+    app.new_stonk(
         StonkClass::Technology,
         "Cassius INC".into(),
         98.0,
@@ -23,8 +24,7 @@ async fn main() -> AppResult<()> {
         0.01,
         0.025,
     );
-    let tesla = Stonk::new(
-        1,
+    app.new_stonk(
         StonkClass::Technology,
         "Tesla".into(),
         100.0,
@@ -32,8 +32,7 @@ async fn main() -> AppResult<()> {
         0.0,
         0.01,
     );
-    let rovanti = Stonk::new(
-        2,
+    app.new_stonk(
         StonkClass::Commodity,
         "Rovanti".into(),
         80.0,
@@ -41,8 +40,7 @@ async fn main() -> AppResult<()> {
         0.005,
         0.005,
     );
-    let riccardino = Stonk::new(
-        3,
+    app.new_stonk(
         StonkClass::Technology,
         "Riccardino".into(),
         90.0,
@@ -50,9 +48,6 @@ async fn main() -> AppResult<()> {
         0.000,
         0.01,
     );
-
-    let stonks = vec![tesla, cassius_inc, rovanti, riccardino];
-    let app = App::new(stonks);
 
     AppServer::new(app).run().await?;
 
