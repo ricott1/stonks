@@ -152,13 +152,16 @@ pub struct Stonk {
 
 impl Stonk {
     pub fn data(&self, x_ticks: Vec<f64>) -> Vec<(f64, f64)> {
+        if self.historical_prices.len() < x_ticks.len() {
+            return vec![];
+        }
         x_ticks
             .iter()
             .enumerate()
             .map(|(idx, t)| {
                 (
                     *t,
-                    self.historical_prices[self.historical_prices.len() - x_ticks.len() + idx],
+                    self.historical_prices[self.historical_prices.len() + idx - x_ticks.len()],
                 )
             })
             .collect::<Vec<(f64, f64)>>()

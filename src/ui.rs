@@ -25,7 +25,6 @@ pub struct Ui<'a> {
 impl<'a> Ui<'a> {
     fn render_day(&mut self, frame: &mut Frame, app: &App) -> AppResult<()> {
         let area = frame.size();
-        let split = Layout::vertical([0, 60]).split(area);
         let styles = vec![
             Style::default().cyan(),
             Style::default().magenta(),
@@ -37,7 +36,7 @@ impl<'a> Ui<'a> {
 
         let mut x_ticks = app.x_ticks();
 
-        let data_size = split[1].width as usize - 5;
+        let data_size = area.width as usize - 5;
         // We want to take only the last 'data_size' data
         let to_skip = if x_ticks.len() > data_size {
             x_ticks.len() - data_size
@@ -108,7 +107,7 @@ impl<'a> Ui<'a> {
                     .bounds([self.min_y_bound as f64, self.max_y_bound as f64]),
             );
 
-        frame.render_widget(chart, split[1]);
+        frame.render_widget(chart, area);
         Ok(())
     }
 
