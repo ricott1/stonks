@@ -116,7 +116,7 @@ impl StonkClass {
 
 #[derive(Debug, Clone)]
 pub struct Stonk {
-    pub id: u64,
+    pub id: usize,
     pub class: StonkClass,
     pub name: String,
     pub price_per_share: f64,
@@ -129,7 +129,7 @@ pub struct Stonk {
 
 impl Stonk {
     pub fn new(
-        id: u64,
+        id: usize,
         class: StonkClass,
         name: String,
         price_per_share: f64,

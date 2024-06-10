@@ -201,7 +201,7 @@ impl Handler for AppServer {
             x if x.code == crossterm::event::KeyCode::Esc => {
                 if let Some(tui) = clients.get_mut(&self.id) {
                     tui.terminal.clear()?;
-                    tui.terminal.show_cursor().unwrap_or_else(|e| {});
+                    tui.terminal.show_cursor().unwrap_or_else(|_| {});
                     clients.remove(&self.id);
                     session.disconnect(Disconnect::ByApplication, "Game quit", "");
                     session.close(channel);

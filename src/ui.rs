@@ -26,6 +26,14 @@ impl<'a> Ui<'a> {
     fn render_day(&mut self, frame: &mut Frame, app: &App) -> AppResult<()> {
         let area = frame.size();
         let split = Layout::vertical([0, 60]).split(area);
+        let styles = vec![
+            Style::default().cyan(),
+            Style::default().magenta(),
+            Style::default().green(),
+            Style::default().red(),
+            Style::default().yellow(),
+            Style::default().blue(),
+        ];
 
         let mut x_ticks = app.x_ticks();
 
@@ -71,7 +79,7 @@ impl<'a> Ui<'a> {
                 Dataset::default()
                     .name(app.stonks[idx].name.clone())
                     .marker(symbols::Marker::HalfBlock)
-                    .style(app.stonks[idx].class.style())
+                    .style(styles[app.stonks[idx].id])
                     .data(&datas[idx]),
             );
         }
