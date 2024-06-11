@@ -1,3 +1,4 @@
+use crossterm::event::KeyCode;
 use rand::Rng;
 use ratatui::style::{Style, Stylize};
 
@@ -28,6 +29,17 @@ impl App {
             phase: GamePhase::Day {
                 counter: PHASE_LENGTH,
             },
+        }
+    }
+
+    pub fn handle_key_events(&mut self, key_code: KeyCode) {
+        match self.phase {
+            GamePhase::Day { .. } => match key_code {
+                KeyCode::Up => self.global_trend += 0.01,
+                KeyCode::Down => self.global_trend -= 0.01,
+                _ => {}
+            },
+            GamePhase::Night { .. } => {}
         }
     }
 

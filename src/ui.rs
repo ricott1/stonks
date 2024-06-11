@@ -16,14 +16,27 @@ const STONKS: [&'static str; 6] = [
     "╚══════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝╚═╝",
 ];
 
-pub struct Ui<'a> {
+#[derive(Clone, Copy)]
+pub struct UiOptions {
     pub min_y_bound: u16,
     pub max_y_bound: u16,
+}
+
+impl UiOptions {
+    pub fn new() -> Self {
+        UiOptions {
+            min_y_bound: 40,
+            max_y_bound: 140,
+        }
+    }
+}
+
+pub struct Ui<'a> {
     stonk: Vec<Line<'a>>,
 }
 
 impl<'a> Ui<'a> {
-    fn render_day(&mut self, frame: &mut Frame, app: &App) -> AppResult<()> {
+    fn render_day(&mut self, frame: &mut Frame, app: &App, ui_options: UiOptions) -> AppResult<()> {
         let area = frame.size();
         let styles = vec![
             Style::default().cyan(),
@@ -83,7 +96,7 @@ impl<'a> Ui<'a> {
             );
         }
 
-        let avg_bound = (self.min_y_bound + self.max_y_bound) / 2;
+        let avg_bound = (ui_options.min_y_bound + ui_options.max_y_bound) / 2;
 
         let chart = Chart::new(datasets)
             .block(
@@ -100,11 +113,11 @@ impl<'a> Ui<'a> {
                     .title(format!("Price"))
                     .style(Style::default().gray())
                     .labels(vec![
-                        self.min_y_bound.to_string().bold(),
+                        ui_options.min_y_bound.to_string().bold(),
                         avg_bound.to_string().bold(),
-                        self.max_y_bound.to_string().bold(),
+                        ui_options.max_y_bound.to_string().bold(),
                     ])
-                    .bounds([self.min_y_bound as f64, self.max_y_bound as f64]),
+                    .bounds([ui_options.min_y_bound as f64, ui_options.max_y_bound as f64]),
             );
 
         frame.render_widget(chart, area);
@@ -113,8 +126,6 @@ impl<'a> Ui<'a> {
 
     pub fn new() -> Self {
         Self {
-            min_y_bound: 40,
-            max_y_bound: 140,
             stonk: img_to_lines("stonk.png").expect("Cannot load stonk image"),
         }
     }
@@ -140,10 +151,10 @@ impl<'a> Ui<'a> {
         frame.render_widget(clear, area);
     }
 
-    pub fn render(&mut self, frame: &mut Frame, app: &App) -> AppResult<()> {
+    pub fn render(&mut self, frame: &mut Frame, app: &App, ui_options: UiOptions) -> AppResult<()> {
         self.clear(frame);
         match app.phase {
-            GamePhase::Day { .. } => self.render_day(frame, app)?,
+            GamePhase::Day { .. } => self.render_day(frame, app, ui_options)?,
             GamePhase::Night { .. } => {
                 let area = frame.size();
                 let img_width = 2 * self.stonk.len() as u16;

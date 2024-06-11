@@ -1,5 +1,5 @@
-use crate::stonk::App;
-use crate::ui::Ui;
+use crate::stonk::{App, GamePhase};
+use crate::ui::{Ui, UiOptions};
 use crate::utils::AppResult;
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
@@ -58,9 +58,13 @@ where
     ///
     /// [`Draw`]: ratatui::Terminal::draw
     /// [`rendering`]: crate::ui:render
-    pub fn draw(&mut self, ui: &mut Ui, app: &App) -> AppResult<()> {
+    pub fn draw(&mut self, ui: &mut Ui, app: &App, ui_options: UiOptions) -> AppResult<()> {
+        match app.phase {
+            GamePhase::Day { .. } => self.terminal.clear()?,
+            GamePhase::Night { .. } => {}
+        }
         self.terminal
-            .draw(|frame| ui.render(frame, app).expect("Failed rendering"))?;
+            .draw(|frame| ui.render(frame, app, ui_options).expect("Failed rendering"))?;
         Ok(())
     }
 

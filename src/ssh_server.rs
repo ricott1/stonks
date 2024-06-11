@@ -1,7 +1,7 @@
 use crate::ssh_backend::SSHBackend;
 use crate::stonk::App;
 use crate::tui::Tui;
-use crate::ui::Ui;
+use crate::ui::{Ui, UiOptions};
 use crate::utils::AppResult;
 use async_trait::async_trait;
 use russh::{server::*, Channel, ChannelId, CryptoVec, Disconnect};
@@ -10,8 +10,8 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::sync::Arc;
+use std::time::SystemTime;
 use tokio::sync::Mutex;
-use tracing::info;
 
 const SERVER_SSH_PORT: u16 = 3333;
 
@@ -66,10 +66,16 @@ impl std::io::Write for TerminalHandle {
     }
 }
 
+struct Client {
+    tui: Tui<SSHBackend<TerminalHandle>>,
+    ui_options: UiOptions,
+    last_action: SystemTime,
+}
+
 #[derive(Clone)]
 pub struct AppServer {
     app: Arc<Mutex<App>>,
-    clients: Arc<Mutex<HashMap<usize, Tui<SSHBackend<TerminalHandle>>>>>,
+    clients: Arc<Mutex<HashMap<usize, Client>>>,
     id: usize,
 }
 
@@ -98,8 +104,10 @@ impl AppServer {
 
                 app.tick();
 
-                for (id, tui) in clients.iter_mut() {
-                    tui.draw(&mut ui, &app)
+                for (id, client) in clients.iter_mut() {
+                    client
+                        .tui
+                        .draw(&mut ui, &app, client.ui_options)
                         .unwrap_or_else(|_| to_remove.push(id));
                 }
 
@@ -170,7 +178,13 @@ impl Handler for AppServer {
                 .clear()
                 .map_err(|e| anyhow::anyhow!("Failed to clear terminal: {}", e))?;
 
-            clients.insert(self.id, tui);
+            let client = Client {
+                tui,
+                ui_options: UiOptions::new(),
+                last_action: SystemTime::now(),
+            };
+
+            clients.insert(self.id, client);
         }
 
         Ok(true)
@@ -192,27 +206,39 @@ impl Handler for AppServer {
     ) -> Result<(), Self::Error> {
         let key_event = convert_data_to_key_event(data);
         let mut clients = self.clients.lock().await;
-        match key_event {
-            x if x.code == crossterm::event::KeyCode::Esc => {
-                if let Some(tui) = clients.get_mut(&self.id) {
-                    tui.terminal.clear()?;
-                    tui.terminal.show_cursor().unwrap_or_else(|_| {});
+        let mut app = self.app.lock().await;
+        if let Some(client) = clients.get_mut(&self.id) {
+            match key_event.code {
+                crossterm::event::KeyCode::Esc => {
+                    client.tui.terminal.clear()?;
+                    client.tui.terminal.show_cursor().unwrap_or_else(|_| {});
                     clients.remove(&self.id);
                     session.disconnect(Disconnect::ByApplication, "Game quit", "");
                     session.close(channel);
                 }
-            }
-            _ => {
-                if let Some(tui) = clients.get_mut(&self.id) {
-                    tui.terminal.clear()?;
-                    // self.app.handle_key_events(key_event).unwrap_or_else(|e| {
-                    //     log::error!("Failed to handle key event for client {}: {}", self.id, e)
-                    // });
-                } else {
-                    session.disconnect(Disconnect::ByApplication, "Game quit", "");
-                    session.close(channel);
+                crossterm::event::KeyCode::Left => {
+                    if client.ui_options.min_y_bound > 10 {
+                        client.ui_options.min_y_bound -= 10;
+                        client.ui_options.max_y_bound -= 10;
+                    } else {
+                        client.ui_options.min_y_bound = 0;
+                        client.ui_options.max_y_bound = 100;
+                    }
+                }
+
+                crossterm::event::KeyCode::Right => {
+                    client.ui_options.min_y_bound += 10;
+                    client.ui_options.max_y_bound += 10;
+                }
+
+                _ => {
+                    (*app).handle_key_events(key_event.code);
+                    client.last_action = SystemTime::now();
                 }
             }
+        } else {
+            session.disconnect(Disconnect::ByApplication, "Game quit", "");
+            session.close(channel);
         }
 
         Ok(())
