@@ -80,7 +80,7 @@ use ratatui::{
 pub struct SSHBackend<W: Write> {
     /// The writer used to send commands to the terminal.
     writer: W,
-    size: (u16, u16),
+    pub size: (u16, u16),
 }
 
 impl<W> SSHBackend<W>

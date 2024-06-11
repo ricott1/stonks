@@ -7,13 +7,15 @@ use async_trait::async_trait;
 use russh::{server::*, Channel, ChannelId, CryptoVec, Disconnect};
 use russh_keys::key::PublicKey;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 use tokio::sync::Mutex;
 
 const SERVER_SSH_PORT: u16 = 3333;
+const MAX_TIMEOUT_SECONDS: u64 = 30;
 
 pub fn save_keys(signing_key: &ed25519_dalek::SigningKey) -> AppResult<()> {
     let file = File::create::<&str>("./keys".into())?;
@@ -32,11 +34,20 @@ pub fn load_keys() -> AppResult<ed25519_dalek::SigningKey> {
 }
 
 #[derive(Clone)]
-struct TerminalHandle {
+pub struct TerminalHandle {
     handle: Handle,
     // The sink collects the data which is finally flushed to the handle.
     sink: Vec<u8>,
     channel_id: ChannelId,
+}
+
+impl Debug for TerminalHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TerminalHandle")
+            .field("sink", &self.sink)
+            .field("channel_id", &self.channel_id)
+            .finish()
+    }
 }
 
 impl TerminalHandle {
@@ -67,7 +78,7 @@ impl std::io::Write for TerminalHandle {
 }
 
 struct Client {
-    tui: Tui<SSHBackend<TerminalHandle>>,
+    tui: Tui,
     ui_options: UiOptions,
     last_action: SystemTime,
 }
@@ -114,6 +125,19 @@ impl AppServer {
                 // for id in to_remove {
                 //     clients.remove(&id);
                 // }
+            }
+        });
+
+        let clients = self.clients.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+
+                let mut clients = clients.lock().await;
+                clients.retain(|_, c| {
+                    c.last_action.elapsed().expect("Time flows")
+                        <= Duration::from_secs(MAX_TIMEOUT_SECONDS)
+                })
             }
         });
 
@@ -208,13 +232,19 @@ impl Handler for AppServer {
         let mut clients = self.clients.lock().await;
         let mut app = self.app.lock().await;
         if let Some(client) = clients.get_mut(&self.id) {
+            client.last_action = SystemTime::now();
             match key_event.code {
                 crossterm::event::KeyCode::Esc => {
-                    client.tui.terminal.clear()?;
-                    client.tui.terminal.show_cursor().unwrap_or_else(|_| {});
+                    client
+                        .tui
+                        .exit()
+                        .map_err(|e| anyhow::anyhow!("Failed to exit tui: {}", e))?;
                     clients.remove(&self.id);
                     session.disconnect(Disconnect::ByApplication, "Game quit", "");
                     session.close(channel);
+                }
+                crossterm::event::KeyCode::Char('c') => {
+                    client.tui.terminal.clear()?;
                 }
                 crossterm::event::KeyCode::Left => {
                     if client.ui_options.min_y_bound > 10 {
@@ -233,7 +263,6 @@ impl Handler for AppServer {
 
                 _ => {
                     (*app).handle_key_events(key_event.code);
-                    client.last_action = SystemTime::now();
                 }
             }
         } else {

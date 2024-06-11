@@ -1,4 +1,6 @@
-use crate::stonk::{App, GamePhase};
+use crate::ssh_backend::SSHBackend;
+use crate::ssh_server::TerminalHandle;
+use crate::stonk::App;
 use crate::ui::{Ui, UiOptions};
 use crate::utils::AppResult;
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
@@ -13,21 +15,14 @@ use std::panic;
 /// It is responsible for setting up the terminal,
 /// initializing the interface and handling the draw events.
 #[derive(Debug)]
-pub struct Tui<B>
-where
-    B: ratatui::backend::Backend,
-{
+pub struct Tui {
     /// Interface to the Terminal.
-    pub terminal: Terminal<B>,
-    // pub events: EventHandler,
+    pub terminal: Terminal<SSHBackend<TerminalHandle>>,
 }
 
-impl<B> Tui<B>
-where
-    B: ratatui::backend::Backend,
-{
+impl Tui {
     /// Constructs a new instance of [`Tui`].
-    pub fn new(backend: B) -> AppResult<Self> {
+    pub fn new(backend: SSHBackend<TerminalHandle>) -> AppResult<Self> {
         let terminal = Terminal::new(backend)?;
         let tui = Self { terminal };
         // tui.init()?;
@@ -80,6 +75,8 @@ where
 
     pub fn resize(&mut self, rect: Rect) -> AppResult<()> {
         self.terminal.resize(rect)?;
+        self.terminal.backend_mut().size = (rect.width, rect.height);
+        self.terminal.clear()?;
         Ok(())
     }
 
@@ -88,8 +85,8 @@ where
     /// It disables the raw mode and reverts back the terminal properties.
     pub fn exit(&mut self) -> AppResult<()> {
         self.terminal.show_cursor()?;
-        Self::reset()?;
         self.terminal.clear()?;
+        Self::reset()?;
         Ok(())
     }
 }
