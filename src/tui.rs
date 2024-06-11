@@ -59,10 +59,10 @@ where
     /// [`Draw`]: ratatui::Terminal::draw
     /// [`rendering`]: crate::ui:render
     pub fn draw(&mut self, ui: &mut Ui, app: &App, ui_options: UiOptions) -> AppResult<()> {
-        match app.phase {
-            GamePhase::Day { .. } => self.terminal.clear()?,
-            GamePhase::Night { .. } => {}
-        }
+        // match app.phase {
+        //     GamePhase::Day { .. } => self.terminal.clear()?,
+        //     GamePhase::Night { .. } => {}
+        // }
         self.terminal
             .draw(|frame| ui.render(frame, app, ui_options).expect("Failed rendering"))?;
         Ok(())
