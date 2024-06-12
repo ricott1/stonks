@@ -37,7 +37,7 @@ impl Tui {
             EnableMouseCapture
         )?;
 
-        self.terminal.hide_cursor()?;
+        // self.terminal.hide_cursor()?;
         self.terminal.clear()?;
         Ok(())
     }
@@ -78,7 +78,7 @@ impl Tui {
             LeaveAlternateScreen,
             DisableMouseCapture
         )?;
-        self.terminal.show_cursor()?;
+        // self.terminal.show_cursor()?;
         self.terminal.clear()?;
         Ok(())
     }
