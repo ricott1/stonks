@@ -142,7 +142,7 @@ impl<'a> Ui<'a> {
                         .copied()
                         .unwrap_or_default() as u16
                         / 2000
-                        * 2000
+                        * 20
                         - 10;
                     max_y_bound = stonk
                         .historical_prices
@@ -151,7 +151,7 @@ impl<'a> Ui<'a> {
                         .copied()
                         .unwrap_or_default() as u16
                         / 2000
-                        * 2000
+                        * 20
                         + 10;
                 }
             }
