@@ -131,7 +131,7 @@ impl<'a> Ui<'a> {
         let mut max_y_bound = ui_options.max_y_bound;
         if let Some(stonk_id) = ui_options.focus_on_stonk {
             if let Some(stonk) = market.stonks.get(&stonk_id) {
-                if stonk.price_per_share_in_cents < 20 {
+                if stonk.price_per_share_in_cents < 2000 {
                     min_y_bound = 0;
                     max_y_bound = 40;
                 } else {
@@ -141,8 +141,8 @@ impl<'a> Ui<'a> {
                         .min()
                         .copied()
                         .unwrap_or_default() as u16
-                        / 20
-                        * 20
+                        / 2000
+                        * 2000
                         - 10;
                     max_y_bound = stonk
                         .historical_prices
@@ -150,8 +150,8 @@ impl<'a> Ui<'a> {
                         .max()
                         .copied()
                         .unwrap_or_default() as u16
-                        / 20
-                        * 20
+                        / 2000
+                        * 2000
                         + 10;
                 }
             }

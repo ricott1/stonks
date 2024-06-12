@@ -213,7 +213,8 @@ impl Stonk {
                 (
                     *t,
                     self.historical_prices[self.historical_prices.len() + idx - x_ticks.len()]
-                        as f64,
+                        as f64
+                        / 100.0,
                 )
             })
             .collect::<Vec<(f64, f64)>>()
