@@ -1,8 +1,7 @@
-use std::collections::HashMap;
-
 use crossterm::event::KeyCode;
 use rand::Rng;
 use ratatui::style::{Style, Stylize};
+use std::collections::HashMap;
 
 use crate::{
     agent::{AgentAction, DecisionAgent},
@@ -11,11 +10,11 @@ use crate::{
 
 #[derive(Debug, Clone, Copy)]
 pub enum GamePhase {
-    Day { counter: usize },
-    Night { counter: usize },
+    Day { counter: u64 },
+    Night { counter: u64 },
 }
 
-const PHASE_LENGTH: usize = 120;
+const PHASE_LENGTH: u64 = 120;
 
 pub trait StonkMarket {
     fn tick(&mut self);
@@ -84,7 +83,7 @@ impl Market {
 
     pub fn tick_day(&mut self) {
         let rng = &mut rand::thread_rng();
-        if self.last_tick % 120 == 0 {
+        if self.last_tick % PHASE_LENGTH == 0 {
             self.global_trend = rng.gen_range(-0.2..0.2);
         }
         for (_, stonk) in self.stonks.iter_mut() {
@@ -145,7 +144,7 @@ impl StonkMarket for Market {
                             agent.sub_cash(cost)?;
                             agent.add_stonk(stonk_id, amount)?;
                             stonk.allocated_shares += 1;
-                            stonk.drift += stonk.drift_volatility;
+                            stonk.drift = (stonk.drift + stonk.drift_volatility).min(1.0);
                         }
                     }
                     AgentAction::Sell { stonk_id, amount } => {
@@ -154,7 +153,7 @@ impl StonkMarket for Market {
                             agent.sub_stonk(stonk_id, amount)?;
                             agent.add_cash(cost)?;
                             stonk.allocated_shares -= 1;
-                            stonk.drift -= stonk.drift_volatility;
+                            stonk.drift = (stonk.drift - stonk.drift_volatility).max(-1.0);
                         }
                     }
                 },

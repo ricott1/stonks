@@ -18,7 +18,7 @@ use tokio::sync::Mutex;
 use tracing::debug;
 
 const SERVER_SSH_PORT: u16 = 3333;
-const MAX_TIMEOUT_SECONDS: u64 = 30;
+const MAX_TIMEOUT_SECONDS: u64 = 120;
 
 pub fn save_keys(signing_key: &ed25519_dalek::SigningKey) -> AppResult<()> {
     let file = File::create::<&str>("./keys".into())?;
