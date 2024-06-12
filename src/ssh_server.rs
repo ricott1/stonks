@@ -6,6 +6,7 @@ use crate::ui::{Ui, UiDisplay, UiOptions};
 use crate::utils::AppResult;
 use async_trait::async_trait;
 use crossterm::event::KeyCode;
+use ratatui::layout::Rect;
 use russh::{server::*, Channel, ChannelId, CryptoVec, Disconnect};
 use russh_keys::key::PublicKey;
 use std::collections::HashMap;
@@ -80,7 +81,6 @@ impl std::io::Write for TerminalHandle {
     }
 }
 
-#[derive(Debug)]
 struct Client {
     tui: Tui,
     ui_options: UiOptions,
@@ -330,6 +330,31 @@ impl Handler for AppServer {
             session.close(channel);
         }
 
+        Ok(())
+    }
+
+    async fn window_change_request(
+        &mut self,
+        _: ChannelId,
+        col_width: u32,
+        row_height: u32,
+        _: u32,
+        _: u32,
+        _: &mut Session,
+    ) -> Result<(), Self::Error> {
+        let mut clients = self.clients.lock().await;
+
+        if let Some(client) = clients.get_mut(&self.id) {
+            client
+                .tui
+                .resize(Rect {
+                    x: 0,
+                    y: 0,
+                    width: col_width as u16,
+                    height: row_height as u16,
+                })
+                .map_err(|e| anyhow::anyhow!("Resize error: {}", e))?;
+        }
         Ok(())
     }
 }
