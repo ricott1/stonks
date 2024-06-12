@@ -200,7 +200,13 @@ impl AppServer {
                 for (_, client) in clients.iter_mut() {
                     client
                         .tui
-                        .draw(&mut ui, &market, client.ui_options, &client.agent)
+                        .draw(
+                            &mut ui,
+                            &market,
+                            client.ui_options,
+                            &client.agent,
+                            clients.len(),
+                        )
                         .unwrap_or_else(|e| debug!("Failed to draw: {}", e));
                 }
 

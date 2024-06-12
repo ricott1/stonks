@@ -169,7 +169,7 @@ impl<'a> Ui<'a> {
         frame.render_widget(chart, split[0]);
 
         frame.render_widget(
-            Paragraph::new(format!("#:select, enter:reset, p:portfolio, l:stonks",)),
+            Paragraph::new(format!("'#':select stonk number '#', enter:reset",)), //, p:portfolio, l:stonks"
             split[1],
         );
 
@@ -235,6 +235,7 @@ impl<'a> Ui<'a> {
         market: &Market,
         ui_options: UiOptions,
         agent: &UserAgent,
+        number_of_players: usize,
     ) -> AppResult<()> {
         self.clear(frame);
 
@@ -266,7 +267,14 @@ impl<'a> Ui<'a> {
                     .split(split[1]);
 
                     frame.render_widget(Paragraph::new(self.stonk.clone()), v_split[0]);
-                    frame.render_widget(Paragraph::new("Get ready to").centered(), v_split[1]);
+                    frame.render_widget(
+                        Paragraph::new(format!(
+                            "{} players online!\nGet ready to",
+                            number_of_players
+                        ))
+                        .centered(),
+                        v_split[1],
+                    );
                     frame.render_widget(
                         Paragraph::new(
                             STONKS

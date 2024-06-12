@@ -60,13 +60,14 @@ impl Tui {
         app: &Market,
         ui_options: UiOptions,
         agent: &UserAgent,
+        number_of_players: usize,
     ) -> AppResult<()> {
         // match app.phase {
         //     GamePhase::Day { .. } => self.terminal.clear()?,
         //     GamePhase::Night { .. } => {}
         // }
         self.terminal.draw(|frame| {
-            ui.render(frame, app, ui_options, agent)
+            ui.render(frame, app, ui_options, agent, number_of_players)
                 .expect("Failed rendering")
         })?;
         Ok(())
