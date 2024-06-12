@@ -100,23 +100,20 @@ impl<'a> Ui<'a> {
         let datas = market
             .stonks
             .iter()
-            .map(|(id, stonk)| {
-                if let Some(stonk_id) = ui_options.focus_on_stonk {
-                    if stonk_id == *id {
-                        stonk.data(x_ticks.clone())
-                    } else {
-                        vec![]
-                    }
-                } else {
-                    stonk.data(x_ticks.clone())
-                }
-            })
+            .map(|(_, stonk)| stonk.data(x_ticks.clone()))
             .collect::<Vec<Vec<(f64, f64)>>>();
 
         let datasets = market
             .stonks
             .iter()
             .enumerate()
+            .filter(|(idx, _)| {
+                if let Some(stonk_id) = ui_options.focus_on_stonk {
+                    *idx == stonk_id
+                } else {
+                    true
+                }
+            })
             .map(|(idx, (_, stonk))| {
                 Dataset::default()
                     .graph_type(GraphType::Line)
