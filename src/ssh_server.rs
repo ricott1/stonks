@@ -7,7 +7,7 @@ use crate::utils::AppResult;
 use async_trait::async_trait;
 use crossterm::event::KeyCode;
 use ratatui::layout::Rect;
-use russh::{server::*, Channel, ChannelId, CryptoVec, Disconnect};
+use russh::{server::*, Channel, ChannelId, CryptoVec, Disconnect, Pty};
 use russh_keys::key::PublicKey;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -333,6 +333,23 @@ impl Handler for AppServer {
         Ok(())
     }
 
+    async fn pty_request(
+        &mut self,
+        channel: ChannelId,
+        _: &str,
+        col_width: u32,
+        row_height: u32,
+        pix_width: u32,
+        pix_height: u32,
+        _: &[(Pty, u32)],
+        session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        self.window_change_request(
+            channel, col_width, row_height, pix_width, pix_height, session,
+        )
+        .await
+    }
+
     async fn window_change_request(
         &mut self,
         _: ChannelId,
@@ -342,8 +359,8 @@ impl Handler for AppServer {
         _: u32,
         _: &mut Session,
     ) -> Result<(), Self::Error> {
+        println!("Window resize request");
         let mut clients = self.clients.lock().await;
-
         if let Some(client) = clients.get_mut(&self.id) {
             client
                 .tui
