@@ -71,6 +71,7 @@ impl Market {
             price_per_share,
             number_of_shares,
             drift,
+            drift_volatility: 0.005,
             volatility: volatility.max(0.001).min(0.99),
             historical_prices: vec![price_per_share],
         };
@@ -135,17 +136,19 @@ impl StonkMarket for Market {
             GamePhase::Day { .. } => match agent.selected_action() {
                 Some(action) => match action {
                     AgentAction::Buy { stonk_id, amount } => {
-                        if let Some(stonk) = self.stonks.get(&stonk_id) {
+                        if let Some(stonk) = self.stonks.get_mut(&stonk_id) {
                             let cost = stonk.price_per_share * amount as f64;
                             agent.sub_cash(cost)?;
                             agent.add_stonk(stonk_id, amount)?;
+                            stonk.drift += stonk.drift_volatility;
                         }
                     }
                     AgentAction::Sell { stonk_id, amount } => {
-                        if let Some(stonk) = self.stonks.get(&stonk_id) {
+                        if let Some(stonk) = self.stonks.get_mut(&stonk_id) {
                             let cost = stonk.price_per_share * amount as f64;
                             agent.sub_stonk(stonk_id, amount)?;
                             agent.add_cash(cost)?;
+                            stonk.drift -= stonk.drift_volatility;
                         }
                     }
                 },
@@ -187,6 +190,7 @@ pub struct Stonk {
     pub price_per_share: f64,
     pub number_of_shares: u16,
     pub drift: f64,
+    pub drift_volatility: f64,
     pub volatility: f64,
     pub historical_prices: Vec<f64>,
 }
