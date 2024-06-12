@@ -68,7 +68,7 @@ impl<'a> Ui<'a> {
         let split = Layout::vertical([
             Constraint::Min(0),
             Constraint::Length(1),
-            Constraint::Length(6),
+            Constraint::Length(1),
             Constraint::Length(1),
         ])
         .split(area);
@@ -259,9 +259,9 @@ impl<'a> Ui<'a> {
 
                     let v_split = Layout::vertical([
                         Constraint::Max(img_width / 2),
-                        Constraint::Length(1),
-                        Constraint::Length(8),
-                        Constraint::Length(1),
+                        Constraint::Length(2),
+                        Constraint::Length(7),
+                        Constraint::Length(2),
                     ])
                     .split(split[1]);
 
