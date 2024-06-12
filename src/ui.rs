@@ -206,8 +206,8 @@ impl<'a> Ui<'a> {
                     .unwrap_or_default();
                 frame.render_widget(
                     Paragraph::new(format!(
-                        "Cash: ${:.0} - {} ({:.03}%)",
-                        agent.cash(),
+                        "Cash: ${:.2} - {} ({:.03}%)",
+                        agent.formatted_cash(),
                         amount,
                         (amount as f64 / stonk.number_of_shares as f64)
                     )),
@@ -215,13 +215,13 @@ impl<'a> Ui<'a> {
                 );
             } else {
                 frame.render_widget(
-                    Paragraph::new(format!("Cash: ${:.0}", agent.cash(),)),
+                    Paragraph::new(format!("Cash: ${:.2}", agent.formatted_cash(),)),
                     split[3],
                 );
             }
         } else {
             frame.render_widget(
-                Paragraph::new(format!("Cash: ${:.0}", agent.cash(),)),
+                Paragraph::new(format!("Cash: ${:.2}", agent.formatted_cash(),)),
                 split[3],
             );
         }

@@ -23,7 +23,7 @@ pub trait DecisionAgent {
 
 #[derive(Debug, Clone, Default)]
 pub struct UserAgent {
-    cash: u64,
+    cash: u64, //in usd cents
     owned_stonks: HashMap<usize, u64>,
     last_actions: Vec<AgentAction>,
     pending_action: Option<AgentAction>,
@@ -35,6 +35,10 @@ impl UserAgent {
             cash: 10000,
             ..Default::default()
         }
+    }
+
+    pub fn formatted_cash(&self) -> f64 {
+        self.cash as f64 / 100.0
     }
 }
 
