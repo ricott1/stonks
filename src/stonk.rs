@@ -227,9 +227,9 @@ impl Stonk {
     pub fn tick(&mut self) {
         let rng = &mut rand::thread_rng();
         self.price_per_share_in_cents = if rng.gen_bool((1.0 + self.drift) / 2.0) {
-            self.buy_price()
+            self.buy_price().max(2)
         } else {
-            self.sell_price()
+            self.sell_price().max(1)
         };
         self.historical_prices.push(self.price_per_share_in_cents);
     }
