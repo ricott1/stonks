@@ -14,7 +14,7 @@ pub enum GamePhase {
     Night { counter: u64 },
 }
 
-const PHASE_LENGTH: u64 = 120;
+const PHASE_LENGTH: u64 = 240;
 
 pub trait StonkMarket {
     fn tick(&mut self);
@@ -112,7 +112,7 @@ impl StonkMarket for Market {
                     }
                 } else {
                     self.phase = GamePhase::Night {
-                        counter: PHASE_LENGTH / 2,
+                        counter: PHASE_LENGTH / 10,
                     }
                 }
             }
