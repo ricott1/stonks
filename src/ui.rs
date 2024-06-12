@@ -148,6 +148,7 @@ impl<'a> Ui<'a> {
 
         frame.render_widget(chart, split[0]);
 
+        let f_split = Layout::horizontal([40, 40]).split(split[1]);
         let porfolio = if let Some(stonk_id) = ui_options.focus_on_stonk {
             let stonk_amount = if let Some(stonk) = market.stonks.get(&stonk_id) {
                 let amount = agent
@@ -164,7 +165,11 @@ impl<'a> Ui<'a> {
             format!("Cash: ${:.0}", agent.cash())
         };
 
-        frame.render_widget(Paragraph::new(porfolio), split[1]);
+        frame.render_widget(Paragraph::new(porfolio), f_split[0]);
+        frame.render_widget(
+            Paragraph::new("#:select, enter:reset, b:buy, s:sell, p:portfolio, l:stonks"),
+            f_split[1],
+        );
 
         Ok(())
     }
