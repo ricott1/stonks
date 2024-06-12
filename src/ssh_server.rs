@@ -321,7 +321,11 @@ impl Handler for AppServer {
         if let Some(client) = clients.get_mut(&self.id) {
             match key_event.code {
                 crossterm::event::KeyCode::Esc => {
-                    let _ = client.tui.exit().await;
+                    client
+                        .tui
+                        .exit()
+                        .await
+                        .unwrap_or_else(|e| println!("Error exiting tui: {}", e));
                     clients.remove(&self.id);
                 }
                 _ => {
