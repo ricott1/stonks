@@ -68,6 +68,7 @@ impl<'a> Ui<'a> {
         let split = Layout::vertical([
             Constraint::Min(0),
             Constraint::Length(1),
+            Constraint::Length(6),
             Constraint::Length(1),
         ])
         .split(area);
