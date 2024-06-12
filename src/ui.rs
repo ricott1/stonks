@@ -135,8 +135,8 @@ impl<'a> Ui<'a> {
                     min_y_bound = 0;
                     max_y_bound = 20;
                 } else {
-                    min_y_bound = stonk.price_per_share as u16 / 10 * 10 - 5;
-                    max_y_bound = stonk.price_per_share as u16 / 10 * 10 + 5;
+                    min_y_bound = stonk.price_per_share as u16 / 10 * 10 - 10;
+                    max_y_bound = stonk.price_per_share as u16 / 10 * 10 + 10;
                 }
             }
         }
