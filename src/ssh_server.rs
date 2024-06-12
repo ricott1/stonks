@@ -311,10 +311,6 @@ impl Handler for AppServer {
         if let Some(client) = clients.get_mut(&self.id) {
             match key_event.code {
                 crossterm::event::KeyCode::Esc => {
-                    let _ = client
-                        .tui
-                        .exit()
-                        .map_err(|e| anyhow::anyhow!("Failed to exit tui: {}", e));
                     clients.remove(&self.id);
                     session.disconnect(Disconnect::ByApplication, "Game quit", "");
                     session.close(channel);
