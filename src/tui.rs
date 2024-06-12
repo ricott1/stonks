@@ -33,11 +33,10 @@ impl Tui {
     fn init(&mut self) -> AppResult<()> {
         crossterm::execute!(
             self.terminal.backend_mut(),
-            EnterAlternateScreen,
+            // EnterAlternateScreen,
             EnableMouseCapture
         )?;
 
-        // self.terminal.hide_cursor()?;
         self.terminal.clear()?;
         Ok(())
     }
@@ -73,13 +72,12 @@ impl Tui {
     /// This function is also used for the panic hook to revert
     /// the terminal properties if unexpected errors occur.
     fn reset(&mut self) -> AppResult<()> {
+        self.terminal.clear()?;
         crossterm::execute!(
             self.terminal.backend_mut(),
-            LeaveAlternateScreen,
+            // LeaveAlternateScreen,
             DisableMouseCapture
         )?;
-        // self.terminal.show_cursor()?;
-        self.terminal.clear()?;
         Ok(())
     }
 
