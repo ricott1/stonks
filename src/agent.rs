@@ -1,6 +1,7 @@
+use crate::utils::AppResult;
 use std::collections::HashMap;
 
-use crate::utils::AppResult;
+const INITIAL_USER_CASH: u64 = 2500;
 
 #[derive(Debug, Clone, Copy)]
 pub enum AgentAction {
@@ -32,7 +33,7 @@ pub struct UserAgent {
 impl UserAgent {
     pub fn new() -> Self {
         Self {
-            cash: 10000,
+            cash: INITIAL_USER_CASH * 100, // in cents
             ..Default::default()
         }
     }
