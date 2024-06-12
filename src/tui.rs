@@ -4,7 +4,7 @@ use crate::stonk::Market;
 use crate::ui::{Ui, UiOptions};
 use crate::utils::AppResult;
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
-use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::Terminal;
 
 /// Representation of a terminal user interface.
@@ -31,7 +31,6 @@ impl Tui {
     ///
     /// It enables the raw mode and sets terminal properties.
     fn init(&mut self) -> AppResult<()> {
-        terminal::enable_raw_mode()?;
         crossterm::execute!(
             self.terminal.backend_mut(),
             EnterAlternateScreen,
@@ -74,7 +73,6 @@ impl Tui {
     /// This function is also used for the panic hook to revert
     /// the terminal properties if unexpected errors occur.
     fn reset(&mut self) -> AppResult<()> {
-        terminal::disable_raw_mode()?;
         crossterm::execute!(
             self.terminal.backend_mut(),
             LeaveAlternateScreen,
