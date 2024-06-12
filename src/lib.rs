@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod ssh_backend;
 pub mod ssh_server;
 pub mod stonk;

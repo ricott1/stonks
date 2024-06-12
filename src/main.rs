@@ -1,6 +1,6 @@
 use stonks::{
     ssh_server::AppServer,
-    stonk::{App, StonkClass},
+    stonk::{Market, StonkClass},
     utils::AppResult,
 };
 use tracing::metadata::LevelFilter;
@@ -14,7 +14,7 @@ async fn main() -> AppResult<()> {
         .with_file(true)
         .init();
 
-    let mut app = App::new();
+    let mut app = Market::new();
 
     app.new_stonk(
         StonkClass::Technology,
@@ -49,10 +49,7 @@ async fn main() -> AppResult<()> {
         0.01,
     );
 
-    println!("Started App with {} stonks!", app.stonks.len());
-    for _ in 0..app.historical_size {
-        app.tick();
-    }
+    println!("Started Market with {} stonks!", app.stonks.len());
 
     AppServer::new(app).run().await?;
 

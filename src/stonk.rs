@@ -1,6 +1,13 @@
+use std::collections::HashMap;
+
 use crossterm::event::KeyCode;
 use rand::Rng;
 use ratatui::style::{Style, Stylize};
+
+use crate::{
+    agent::{AgentAction, DecisionAgent},
+    utils::AppResult,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub enum GamePhase {
@@ -10,19 +17,24 @@ pub enum GamePhase {
 
 const PHASE_LENGTH: usize = 120;
 
+pub trait StonkMarket {
+    fn tick(&mut self);
+    fn apply_agent_action<A: DecisionAgent>(&mut self, agent: &mut A) -> AppResult<()>;
+}
+
 #[derive(Debug, Clone)]
-pub struct App {
-    pub stonks: Vec<Stonk>,
+pub struct Market {
+    pub stonks: HashMap<usize, Stonk>,
     pub last_tick: u64,
     pub historical_size: usize,
     pub global_trend: f64,
     pub phase: GamePhase,
 }
 
-impl App {
+impl Market {
     pub fn new() -> Self {
-        App {
-            stonks: vec![],
+        Market {
+            stonks: HashMap::new(),
             last_tick: 1,
             historical_size: 500,
             global_trend: 0.0,
@@ -52,7 +64,7 @@ impl App {
         drift: f64,
         volatility: f64,
     ) {
-        let s = Stonk {
+        let mut s = Stonk {
             id: self.stonks.len(),
             class,
             name,
@@ -61,9 +73,11 @@ impl App {
             drift,
             volatility: volatility.max(0.001).min(0.99),
             historical_prices: vec![price_per_share],
-            average: price_per_share,
         };
-        self.stonks.push(s);
+        for _ in 0..self.historical_size {
+            s.tick();
+        }
+        self.stonks.insert(s.id, s);
     }
 
     pub fn tick_day(&mut self) {
@@ -71,7 +85,7 @@ impl App {
         if self.last_tick % 120 == 0 {
             self.global_trend = rng.gen_range(-0.2..0.2);
         }
-        for stonk in self.stonks.iter_mut() {
+        for (_, stonk) in self.stonks.iter_mut() {
             stonk.drift += (self.global_trend - stonk.drift) * rng.gen_range(0.25..0.75);
             stonk.tick();
             while stonk.historical_prices.len() > self.historical_size {
@@ -84,8 +98,10 @@ impl App {
     fn tick_night(&mut self) {
         // let rng = &mut rand::thread_rng();
     }
+}
 
-    pub fn tick(&mut self) {
+impl StonkMarket for Market {
+    fn tick(&mut self) {
         match self.phase {
             GamePhase::Day { counter } => {
                 self.tick_day();
@@ -114,14 +130,33 @@ impl App {
         }
     }
 
-    pub fn x_ticks(&self) -> Vec<f64> {
-        let min_tick = if self.last_tick > self.historical_size as u64 {
-            self.last_tick - self.historical_size as u64
-        } else {
-            0
-        };
+    fn apply_agent_action<A: DecisionAgent>(&mut self, agent: &mut A) -> AppResult<()> {
+        match self.phase {
+            GamePhase::Day { .. } => match agent.selected_action() {
+                Some(action) => match action {
+                    AgentAction::Buy { stonk_id, amount } => {
+                        if let Some(stonk) = self.stonks.get(&stonk_id) {
+                            let cost = stonk.price_per_share * amount as f64;
+                            agent.sub_cash(cost)?;
+                            agent.add_stonk(stonk_id, amount)?;
+                        }
+                    }
+                    AgentAction::Sell { stonk_id, amount } => {
+                        if let Some(stonk) = self.stonks.get(&stonk_id) {
+                            let cost = stonk.price_per_share * amount as f64;
+                            agent.sub_stonk(stonk_id, amount)?;
+                            agent.add_cash(cost)?;
+                        }
+                    }
+                },
+                None => {}
+            },
+            GamePhase::Night { .. } => {
+                return Err("No actions allowed during noght".into());
+            }
+        }
 
-        (min_tick..self.last_tick).map(|t| t as f64).collect()
+        Ok(())
     }
 }
 
@@ -154,7 +189,6 @@ pub struct Stonk {
     pub drift: f64,
     pub volatility: f64,
     pub historical_prices: Vec<f64>,
-    pub average: f64,
 }
 
 impl Stonk {
@@ -174,12 +208,6 @@ impl Stonk {
             .collect::<Vec<(f64, f64)>>()
     }
 
-    pub fn avg_data(&self, x_ticks: Vec<f64>) -> Vec<(f64, f64)> {
-        x_ticks
-            .iter()
-            .map(|t| (*t, self.average))
-            .collect::<Vec<(f64, f64)>>()
-    }
     pub fn market_cap(&self) -> u32 {
         self.price_per_share as u32 * self.number_of_shares as u32
     }
@@ -192,25 +220,5 @@ impl Stonk {
             self.price_per_share * (1.0 - self.volatility)
         };
         self.historical_prices.push(self.price_per_share);
-
-        // let avg_size = 100;
-        // let min = if self.historical_prices.len() > avg_size {
-        //     self.historical_prices.len() - avg_size
-        // } else {
-        //     0
-        // };
-        // self.average = self.historical_prices.iter().skip(min).sum::<f64>()
-        //     / avg_size.min(self.historical_prices.len()) as f64;
     }
-}
-
-#[derive(Debug, Clone)]
-enum AgentAction {
-    Buy { id: u64 },
-    Sell { id: u64 },
-}
-
-trait DecisionAgent {
-    fn cash(&self) -> u32;
-    fn actions(&self) -> Vec<AgentAction>;
 }

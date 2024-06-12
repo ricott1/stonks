@@ -1,9 +1,11 @@
+use crate::agent::{AgentAction, DecisionAgent, UserAgent};
 use crate::ssh_backend::SSHBackend;
-use crate::stonk::App;
+use crate::stonk::{Market, StonkMarket};
 use crate::tui::Tui;
-use crate::ui::{Ui, UiOptions};
+use crate::ui::{Ui, UiDisplay, UiOptions};
 use crate::utils::AppResult;
 use async_trait::async_trait;
+use crossterm::event::KeyCode;
 use russh::{server::*, Channel, ChannelId, CryptoVec, Disconnect};
 use russh_keys::key::PublicKey;
 use std::collections::HashMap;
@@ -13,6 +15,7 @@ use std::io::{Read, Write};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tokio::sync::Mutex;
+use tracing::debug;
 
 const SERVER_SSH_PORT: u16 = 3333;
 const MAX_TIMEOUT_SECONDS: u64 = 30;
@@ -77,23 +80,98 @@ impl std::io::Write for TerminalHandle {
     }
 }
 
+#[derive(Debug)]
 struct Client {
     tui: Tui,
     ui_options: UiOptions,
     last_action: SystemTime,
+    agent: UserAgent,
+}
+
+impl Client {
+    pub fn handle_key_events(&mut self, key_code: KeyCode) -> AppResult<()> {
+        self.last_action = SystemTime::now();
+        match key_code {
+            crossterm::event::KeyCode::Char('c') => {
+                self.tui.terminal.clear()?;
+            }
+            crossterm::event::KeyCode::Left => {
+                if self.ui_options.min_y_bound > 10 {
+                    self.ui_options.min_y_bound -= 10;
+                    self.ui_options.max_y_bound -= 10;
+                } else {
+                    self.ui_options.min_y_bound = 0;
+                    self.ui_options.max_y_bound = 100;
+                }
+            }
+
+            crossterm::event::KeyCode::Right => {
+                self.ui_options.min_y_bound += 10;
+                self.ui_options.max_y_bound += 10;
+            }
+
+            crossterm::event::KeyCode::Char('0') => {
+                self.ui_options.focus_on_stonk = Some(0);
+            }
+
+            crossterm::event::KeyCode::Char('1') => {
+                self.ui_options.focus_on_stonk = Some(1);
+            }
+
+            crossterm::event::KeyCode::Char('2') => {
+                self.ui_options.focus_on_stonk = Some(2);
+            }
+
+            crossterm::event::KeyCode::Char('3') => {
+                self.ui_options.focus_on_stonk = Some(3);
+            }
+
+            crossterm::event::KeyCode::Char('4') => {
+                self.ui_options.focus_on_stonk = Some(4);
+            }
+
+            crossterm::event::KeyCode::Enter => {
+                self.ui_options.focus_on_stonk = None;
+            }
+
+            crossterm::event::KeyCode::Char('p') => self.ui_options.display = UiDisplay::Portfolio,
+            crossterm::event::KeyCode::Char('l') => self.ui_options.display = UiDisplay::Stonks,
+
+            crossterm::event::KeyCode::Char('b') => {
+                if let Some(stonk_id) = self.ui_options.focus_on_stonk {
+                    self.agent.select_action(AgentAction::Buy {
+                        stonk_id,
+                        amount: 1,
+                    })
+                }
+            }
+
+            crossterm::event::KeyCode::Char('s') => {
+                if let Some(stonk_id) = self.ui_options.focus_on_stonk {
+                    self.agent.select_action(AgentAction::Sell {
+                        stonk_id,
+                        amount: 1,
+                    })
+                }
+            }
+
+            _ => {}
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
 pub struct AppServer {
-    app: Arc<Mutex<App>>,
+    market: Arc<Mutex<Market>>,
     clients: Arc<Mutex<HashMap<usize, Client>>>,
     id: usize,
 }
 
 impl AppServer {
-    pub fn new(app: App) -> Self {
+    pub fn new(market: Market) -> Self {
         Self {
-            app: Arc::new(Mutex::new(app)),
+            market: Arc::new(Mutex::new(market)),
             clients: Arc::new(Mutex::new(HashMap::new())),
             id: 0,
         }
@@ -102,38 +180,30 @@ impl AppServer {
     pub async fn run(&mut self) -> AppResult<()> {
         println!("Starting SSH server. Press Ctrl-C to exit.");
         let clients = self.clients.clone();
-        let app = Arc::clone(&self.app);
+        let market = Arc::clone(&self.market);
         tokio::spawn(async move {
             let mut ui = Ui::new();
             loop {
-                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-
-                let mut to_remove = Vec::new();
+                tokio::time::sleep(tokio::time::Duration::from_millis(250)).await;
 
                 let mut clients = clients.lock().await;
-                let mut app = app.lock().await;
+                let mut market = market.lock().await;
 
-                app.tick();
+                market.tick();
 
                 for (id, client) in clients.iter_mut() {
-                    client
-                        .tui
-                        .draw(&mut ui, &app, client.ui_options)
-                        .unwrap_or_else(|_| to_remove.push(id));
+                    market
+                        .apply_agent_action::<UserAgent>(&mut client.agent)
+                        .unwrap_or_else(|e| println!("Could not apply agent {} action: {}", id, e));
                 }
 
-                // for id in to_remove {
-                //     clients.remove(&id);
-                // }
-            }
-        });
+                for (_, client) in clients.iter_mut() {
+                    client
+                        .tui
+                        .draw(&mut ui, &market, client.ui_options, &client.agent)
+                        .unwrap_or_else(|e| debug!("Failed to draw: {}", e));
+                }
 
-        let clients = self.clients.clone();
-        tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-
-                let mut clients = clients.lock().await;
                 clients.retain(|_, c| {
                     c.last_action.elapsed().expect("Time flows")
                         <= Duration::from_secs(MAX_TIMEOUT_SECONDS)
@@ -206,6 +276,7 @@ impl Handler for AppServer {
                 tui,
                 ui_options: UiOptions::new(),
                 last_action: SystemTime::now(),
+                agent: UserAgent::new(),
             };
 
             clients.insert(self.id, client);
@@ -230,39 +301,21 @@ impl Handler for AppServer {
     ) -> Result<(), Self::Error> {
         let key_event = convert_data_to_key_event(data);
         let mut clients = self.clients.lock().await;
-        let mut app = self.app.lock().await;
         if let Some(client) = clients.get_mut(&self.id) {
-            client.last_action = SystemTime::now();
             match key_event.code {
                 crossterm::event::KeyCode::Esc => {
-                    client
+                    let _ = client
                         .tui
                         .exit()
-                        .map_err(|e| anyhow::anyhow!("Failed to exit tui: {}", e))?;
+                        .map_err(|e| anyhow::anyhow!("Failed to exit tui: {}", e));
                     clients.remove(&self.id);
                     session.disconnect(Disconnect::ByApplication, "Game quit", "");
                     session.close(channel);
                 }
-                crossterm::event::KeyCode::Char('c') => {
-                    client.tui.terminal.clear()?;
-                }
-                crossterm::event::KeyCode::Left => {
-                    if client.ui_options.min_y_bound > 10 {
-                        client.ui_options.min_y_bound -= 10;
-                        client.ui_options.max_y_bound -= 10;
-                    } else {
-                        client.ui_options.min_y_bound = 0;
-                        client.ui_options.max_y_bound = 100;
-                    }
-                }
-
-                crossterm::event::KeyCode::Right => {
-                    client.ui_options.min_y_bound += 10;
-                    client.ui_options.max_y_bound += 10;
-                }
-
                 _ => {
-                    (*app).handle_key_events(key_event.code);
+                    client
+                        .handle_key_events(key_event.code)
+                        .map_err(|e| anyhow::anyhow!("Error: {}", e))?;
                 }
             }
         } else {

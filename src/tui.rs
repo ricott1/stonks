@@ -1,6 +1,7 @@
+use crate::agent::UserAgent;
 use crate::ssh_backend::SSHBackend;
 use crate::ssh_server::TerminalHandle;
-use crate::stonk::App;
+use crate::stonk::Market;
 use crate::ui::{Ui, UiOptions};
 use crate::utils::AppResult;
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
@@ -53,13 +54,21 @@ impl Tui {
     ///
     /// [`Draw`]: ratatui::Terminal::draw
     /// [`rendering`]: crate::ui:render
-    pub fn draw(&mut self, ui: &mut Ui, app: &App, ui_options: UiOptions) -> AppResult<()> {
+    pub fn draw(
+        &mut self,
+        ui: &mut Ui,
+        app: &Market,
+        ui_options: UiOptions,
+        agent: &UserAgent,
+    ) -> AppResult<()> {
         // match app.phase {
         //     GamePhase::Day { .. } => self.terminal.clear()?,
         //     GamePhase::Night { .. } => {}
         // }
-        self.terminal
-            .draw(|frame| ui.render(frame, app, ui_options).expect("Failed rendering"))?;
+        self.terminal.draw(|frame| {
+            ui.render(frame, app, ui_options, agent)
+                .expect("Failed rendering")
+        })?;
         Ok(())
     }
 
