@@ -125,8 +125,8 @@ impl<'a> Ui<'a> {
         let mut max_y_bound = ui_options.max_y_bound;
         if let Some(stonk_id) = ui_options.focus_on_stonk {
             if let Some(stonk) = market.stonks.get(&stonk_id) {
-                min_y_bound = (stonk.price_per_share as f64 * 0.75) as u16;
-                max_y_bound = (stonk.price_per_share as f64 * 1.25) as u16;
+                min_y_bound = stonk.price_per_share as u16 * 150 / 200;
+                max_y_bound = stonk.price_per_share as u16 * 250 / 200;
             }
         }
 

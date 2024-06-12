@@ -112,7 +112,7 @@ impl StonkMarket for Market {
                     }
                 } else {
                     self.phase = GamePhase::Night {
-                        counter: PHASE_LENGTH,
+                        counter: PHASE_LENGTH / 2,
                     }
                 }
             }
