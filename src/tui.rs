@@ -78,6 +78,8 @@ impl Tui {
             LeaveAlternateScreen,
             DisableMouseCapture
         )?;
+        self.terminal.show_cursor()?;
+        self.terminal.clear()?;
         Ok(())
     }
 
@@ -85,9 +87,7 @@ impl Tui {
     ///
     /// It disables the raw mode and reverts back the terminal properties.
     pub async fn exit(&mut self) -> AppResult<()> {
-        self.terminal.show_cursor()?;
         self.reset()?;
-        self.terminal.clear()?;
         self.terminal.backend().close().await
     }
 }
