@@ -60,7 +60,7 @@ impl Market {
         class: StonkClass,
         name: String,
         price_per_share: f64,
-        number_of_shares: u16,
+        number_of_shares: u32,
         drift: f64,
         volatility: f64,
     ) {
@@ -70,6 +70,7 @@ impl Market {
             name,
             price_per_share,
             number_of_shares,
+            allocated_shares: 0,
             drift,
             drift_volatility: 0.005,
             volatility: volatility.max(0.001).min(0.99),
@@ -137,17 +138,22 @@ impl StonkMarket for Market {
                 Some(action) => match action {
                     AgentAction::Buy { stonk_id, amount } => {
                         if let Some(stonk) = self.stonks.get_mut(&stonk_id) {
-                            let cost = stonk.price_per_share * amount as f64;
+                            if stonk.number_of_shares == stonk.allocated_shares {
+                                return Err("No more shares available".into());
+                            }
+                            let cost = stonk.buy_price() * amount as f64;
                             agent.sub_cash(cost)?;
                             agent.add_stonk(stonk_id, amount)?;
+                            stonk.allocated_shares += 1;
                             stonk.drift += stonk.drift_volatility;
                         }
                     }
                     AgentAction::Sell { stonk_id, amount } => {
                         if let Some(stonk) = self.stonks.get_mut(&stonk_id) {
-                            let cost = stonk.price_per_share * amount as f64;
+                            let cost = stonk.sell_price() * amount as f64;
                             agent.sub_stonk(stonk_id, amount)?;
                             agent.add_cash(cost)?;
+                            stonk.allocated_shares -= 1;
                             stonk.drift -= stonk.drift_volatility;
                         }
                     }
@@ -188,7 +194,8 @@ pub struct Stonk {
     pub class: StonkClass,
     pub name: String,
     pub price_per_share: f64,
-    pub number_of_shares: u16,
+    pub number_of_shares: u32,
+    pub allocated_shares: u32,
     pub drift: f64,
     pub drift_volatility: f64,
     pub volatility: f64,
@@ -224,5 +231,20 @@ impl Stonk {
             self.price_per_share * (1.0 - self.volatility)
         };
         self.historical_prices.push(self.price_per_share);
+    }
+
+    fn modified_price(&self) -> f64 {
+        let modifier = (self.number_of_shares as f64
+            / (self.number_of_shares - self.allocated_shares) as f64)
+            .powf(0.25);
+        self.price_per_share * modifier as f64
+    }
+
+    pub fn buy_price(&self) -> f64 {
+        self.modified_price() * (1.0 + self.volatility)
+    }
+
+    pub fn sell_price(&self) -> f64 {
+        self.modified_price() * (1.0 - self.volatility)
     }
 }

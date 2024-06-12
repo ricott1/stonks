@@ -1,7 +1,7 @@
 use crate::agent::{DecisionAgent, UserAgent};
 use crate::stonk::{GamePhase, Market};
 use crate::utils::{img_to_lines, AppResult};
-use ratatui::layout::{Constraint, Margin};
+use ratatui::layout::Constraint;
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::symbols;
 use ratatui::text::Line;
@@ -65,7 +65,12 @@ impl<'a> Ui<'a> {
     ) -> AppResult<()> {
         let area = frame.size();
 
-        let split = Layout::vertical([Constraint::Min(0), Constraint::Length(3)]).split(area);
+        let split = Layout::vertical([
+            Constraint::Min(0),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
+        .split(area);
 
         let styles = vec![
             Style::default().cyan(),
@@ -157,28 +162,47 @@ impl<'a> Ui<'a> {
 
         frame.render_widget(chart, split[0]);
 
-        let f_split = Layout::horizontal([40, 40]).split(split[1]);
-        let porfolio = if let Some(stonk_id) = ui_options.focus_on_stonk {
-            let stonk_amount = if let Some(stonk) = market.stonks.get(&stonk_id) {
+        frame.render_widget(
+            Paragraph::new(format!("#:select, enter:reset, p:portfolio, l:stonks",)),
+            split[1],
+        );
+
+        if let Some(stonk_id) = ui_options.focus_on_stonk {
+            if let Some(stonk) = market.stonks.get(&stonk_id) {
+                frame.render_widget(
+                    Paragraph::new(format!(
+                        "b: buy for ${:.0}  s: sell for ${:.0}",
+                        stonk.buy_price(),
+                        stonk.sell_price()
+                    )),
+                    split[2],
+                );
                 let amount = agent
                     .owned_stonks()
-                    .get(&stonk_id)
+                    .get(&stonk.id)
                     .copied()
                     .unwrap_or_default();
-                format!("{} {}", stonk.name, amount)
+                frame.render_widget(
+                    Paragraph::new(format!(
+                        "Cash: ${:.0} - {} ({:.03}%)",
+                        agent.cash(),
+                        amount,
+                        (amount as f64 / stonk.number_of_shares as f64)
+                    )),
+                    split[3],
+                );
             } else {
-                "".to_string()
-            };
-            format!("Cash: ${:.0} - {}", agent.cash(), stonk_amount)
+                frame.render_widget(
+                    Paragraph::new(format!("Cash: ${:.0}", agent.cash(),)),
+                    split[3],
+                );
+            }
         } else {
-            format!("Cash: ${:.0}", agent.cash())
-        };
-
-        frame.render_widget(Paragraph::new(porfolio), f_split[0]);
-        frame.render_widget(
-            Paragraph::new("#:select, enter:reset, b:buy, s:sell, p:portfolio, l:stonks"),
-            f_split[1],
-        );
+            frame.render_widget(
+                Paragraph::new(format!("Cash: ${:.0}", agent.cash(),)),
+                split[3],
+            );
+        }
 
         Ok(())
     }
@@ -212,7 +236,7 @@ impl<'a> Ui<'a> {
             UiDisplay::Portfolio => {}
             UiDisplay::Stonks => match market.phase {
                 GamePhase::Day { .. } => self.render_day(frame, market, ui_options, agent)?,
-                GamePhase::Night { .. } => {
+                GamePhase::Night { counter } => {
                     let area = frame.size();
                     let img_width = 2 * self.stonk.len() as u16;
                     let side_length = if area.width > img_width {
@@ -227,11 +251,16 @@ impl<'a> Ui<'a> {
                     ])
                     .split(area);
 
-                    let v_split =
-                        Layout::vertical([Constraint::Max(img_width / 2), Constraint::Length(8)])
-                            .split(split[1]);
+                    let v_split = Layout::vertical([
+                        Constraint::Max(img_width / 2),
+                        Constraint::Length(1),
+                        Constraint::Length(8),
+                        Constraint::Length(1),
+                    ])
+                    .split(split[1]);
 
                     frame.render_widget(Paragraph::new(self.stonk.clone()), v_split[0]);
+                    frame.render_widget(Paragraph::new("Get ready to").centered(), v_split[1]);
                     frame.render_widget(
                         Paragraph::new(
                             STONKS
@@ -240,10 +269,11 @@ impl<'a> Ui<'a> {
                                 .collect::<Vec<Line>>(),
                         )
                         .centered(),
-                        v_split[1].inner(&Margin {
-                            vertical: 1,
-                            horizontal: 1,
-                        }),
+                        v_split[2],
+                    );
+                    frame.render_widget(
+                        Paragraph::new(format!("in {}", counter)).centered(),
+                        v_split[3],
                     );
                 }
             },
