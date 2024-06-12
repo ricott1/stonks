@@ -121,7 +121,16 @@ impl<'a> Ui<'a> {
             })
             .collect::<Vec<Dataset>>();
 
-        let avg_bound = (ui_options.min_y_bound + ui_options.max_y_bound) / 2;
+        let mut min_y_bound = ui_options.min_y_bound;
+        let mut max_y_bound = ui_options.max_y_bound;
+        if let Some(stonk_id) = ui_options.focus_on_stonk {
+            if let Some(stonk) = market.stonks.get(&stonk_id) {
+                min_y_bound = (stonk.price_per_share as f64 * 0.75) as u16;
+                max_y_bound = (stonk.price_per_share as f64 * 1.25) as u16;
+            }
+        }
+
+        let avg_bound = (min_y_bound + max_y_bound) / 2;
 
         let chart = Chart::new(datasets)
             .block(
@@ -139,11 +148,11 @@ impl<'a> Ui<'a> {
                     .title(format!("Price"))
                     .style(Style::default().gray())
                     .labels(vec![
-                        ui_options.min_y_bound.to_string().bold(),
+                        min_y_bound.to_string().bold(),
                         avg_bound.to_string().bold(),
-                        ui_options.max_y_bound.to_string().bold(),
+                        max_y_bound.to_string().bold(),
                     ])
-                    .bounds([ui_options.min_y_bound as f64, ui_options.max_y_bound as f64]),
+                    .bounds([min_y_bound as f64, max_y_bound as f64]),
             );
 
         frame.render_widget(chart, split[0]);
