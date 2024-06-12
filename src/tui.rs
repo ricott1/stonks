@@ -57,7 +57,7 @@ impl Tui {
     pub fn draw(
         &mut self,
         ui: &mut Ui,
-        app: &Market,
+        market: &Market,
         ui_options: UiOptions,
         agent: &UserAgent,
         number_of_players: usize,
@@ -67,7 +67,7 @@ impl Tui {
         //     GamePhase::Night { .. } => {}
         // }
         self.terminal.draw(|frame| {
-            ui.render(frame, app, ui_options, agent, number_of_players)
+            ui.render(frame, market, ui_options, agent, number_of_players)
                 .expect("Failed rendering")
         })?;
         Ok(())

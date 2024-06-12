@@ -131,12 +131,12 @@ impl<'a> Ui<'a> {
         let mut max_y_bound = ui_options.max_y_bound;
         if let Some(stonk_id) = ui_options.focus_on_stonk {
             if let Some(stonk) = market.stonks.get(&stonk_id) {
-                if stonk.price_per_share < 10.0 {
+                if stonk.price_per_share < 20.0 {
                     min_y_bound = 0;
-                    max_y_bound = 20;
+                    max_y_bound = 40;
                 } else {
-                    min_y_bound = stonk.price_per_share as u16 / 10 * 10 - 10;
-                    max_y_bound = stonk.price_per_share as u16 / 10 * 10 + 10;
+                    min_y_bound = stonk.price_per_share as u16 / 20 * 20 - 20;
+                    max_y_bound = stonk.price_per_share as u16 / 10 * 10 + 20;
                 }
             }
         }

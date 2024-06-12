@@ -187,6 +187,7 @@ impl AppServer {
                 tokio::time::sleep(tokio::time::Duration::from_millis(250)).await;
 
                 let mut clients = clients.lock().await;
+                let number_of_players = clients.len();
                 let mut market = market.lock().await;
 
                 market.tick();
@@ -205,7 +206,7 @@ impl AppServer {
                             &market,
                             client.ui_options,
                             &client.agent,
-                            clients.len(),
+                            number_of_players,
                         )
                         .unwrap_or_else(|e| debug!("Failed to draw: {}", e));
                 }
