@@ -9,9 +9,9 @@ pub enum AgentAction {
 }
 
 pub trait DecisionAgent {
-    fn cash(&self) -> f64;
-    fn add_cash(&mut self, new_amount: f64) -> AppResult<f64>;
-    fn sub_cash(&mut self, new_amount: f64) -> AppResult<f64>;
+    fn cash(&self) -> u64;
+    fn add_cash(&mut self, amount: u64) -> AppResult<u64>;
+    fn sub_cash(&mut self, amount: u64) -> AppResult<u64>;
     fn owned_stonks(&self) -> &HashMap<usize, u64>;
     fn add_stonk(&mut self, stonk_id: usize, amount: u64) -> AppResult<&HashMap<usize, u64>>;
     fn sub_stonk(&mut self, stonk_id: usize, amount: u64) -> AppResult<&HashMap<usize, u64>>;
@@ -23,7 +23,7 @@ pub trait DecisionAgent {
 
 #[derive(Debug, Clone, Default)]
 pub struct UserAgent {
-    cash: f64,
+    cash: u64,
     owned_stonks: HashMap<usize, u64>,
     last_actions: Vec<AgentAction>,
     pending_action: Option<AgentAction>,
@@ -32,22 +32,22 @@ pub struct UserAgent {
 impl UserAgent {
     pub fn new() -> Self {
         Self {
-            cash: 10000.0,
+            cash: 10000,
             ..Default::default()
         }
     }
 }
 
 impl DecisionAgent for UserAgent {
-    fn cash(&self) -> f64 {
+    fn cash(&self) -> u64 {
         self.cash
     }
-    fn add_cash(&mut self, amount: f64) -> AppResult<f64> {
+    fn add_cash(&mut self, amount: u64) -> AppResult<u64> {
         self.cash += amount;
         Ok(self.cash)
     }
 
-    fn sub_cash(&mut self, amount: f64) -> AppResult<f64> {
+    fn sub_cash(&mut self, amount: u64) -> AppResult<u64> {
         if self.cash < amount {
             return Err("Underflow".into());
         }

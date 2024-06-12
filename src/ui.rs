@@ -131,12 +131,28 @@ impl<'a> Ui<'a> {
         let mut max_y_bound = ui_options.max_y_bound;
         if let Some(stonk_id) = ui_options.focus_on_stonk {
             if let Some(stonk) = market.stonks.get(&stonk_id) {
-                if stonk.price_per_share < 20.0 {
+                if stonk.price_per_share_in_cents < 20 {
                     min_y_bound = 0;
                     max_y_bound = 40;
                 } else {
-                    min_y_bound = stonk.price_per_share as u16 / 20 * 20 - 20;
-                    max_y_bound = stonk.price_per_share as u16 / 10 * 10 + 20;
+                    min_y_bound = stonk
+                        .historical_prices
+                        .iter()
+                        .min()
+                        .copied()
+                        .unwrap_or_default() as u16
+                        / 20
+                        * 20
+                        - 10;
+                    max_y_bound = stonk
+                        .historical_prices
+                        .iter()
+                        .max()
+                        .copied()
+                        .unwrap_or_default() as u16
+                        / 20
+                        * 20
+                        + 10;
                 }
             }
         }
@@ -177,9 +193,9 @@ impl<'a> Ui<'a> {
             if let Some(stonk) = market.stonks.get(&stonk_id) {
                 frame.render_widget(
                     Paragraph::new(format!(
-                        "b: buy for ${:.0}  s: sell for ${:.0}",
-                        stonk.buy_price(),
-                        stonk.sell_price()
+                        "b: buy for ${:.2}  s: sell for ${:.2}",
+                        stonk.formatted_buy_price(),
+                        stonk.formatted_sell_price()
                     )),
                     split[2],
                 );
@@ -269,8 +285,9 @@ impl<'a> Ui<'a> {
                     frame.render_widget(Paragraph::new(self.stonk.clone()), v_split[0]);
                     frame.render_widget(
                         Paragraph::new(format!(
-                            "{} players online!\nGet ready to",
-                            number_of_players
+                            "{} player{} online!\nGet ready to",
+                            number_of_players,
+                            if number_of_players > 1 { "s" } else { "" }
                         ))
                         .centered(),
                         v_split[1],

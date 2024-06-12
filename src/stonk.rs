@@ -58,7 +58,7 @@ impl Market {
         &mut self,
         class: StonkClass,
         name: String,
-        price_per_share: f64,
+        price_per_share_in_cents: u64,
         number_of_shares: u32,
         drift: f64,
         volatility: f64,
@@ -67,13 +67,13 @@ impl Market {
             id: self.stonks.len(),
             class,
             name,
-            price_per_share,
+            price_per_share_in_cents,
             number_of_shares,
             allocated_shares: 0,
             drift,
             drift_volatility: 0.005,
             volatility: volatility.max(0.001).min(0.99),
-            historical_prices: vec![price_per_share],
+            historical_prices: vec![price_per_share_in_cents],
         };
         for _ in 0..self.historical_size {
             s.tick();
@@ -140,7 +140,7 @@ impl StonkMarket for Market {
                             if stonk.number_of_shares == stonk.allocated_shares {
                                 return Err("No more shares available".into());
                             }
-                            let cost = stonk.buy_price() * amount as f64;
+                            let cost = stonk.buy_price() * amount;
                             agent.sub_cash(cost)?;
                             agent.add_stonk(stonk_id, amount)?;
                             stonk.allocated_shares += 1;
@@ -149,7 +149,7 @@ impl StonkMarket for Market {
                     }
                     AgentAction::Sell { stonk_id, amount } => {
                         if let Some(stonk) = self.stonks.get_mut(&stonk_id) {
-                            let cost = stonk.sell_price() * amount as f64;
+                            let cost = stonk.sell_price() * amount;
                             agent.sub_stonk(stonk_id, amount)?;
                             agent.add_cash(cost)?;
                             stonk.allocated_shares -= 1;
@@ -192,13 +192,13 @@ pub struct Stonk {
     pub id: usize,
     pub class: StonkClass,
     pub name: String,
-    pub price_per_share: f64,
+    pub price_per_share_in_cents: u64, //price is to be intended in cents, and displayed accordingly
     pub number_of_shares: u32,
     pub allocated_shares: u32,
     pub drift: f64,
     pub drift_volatility: f64,
     pub volatility: f64,
-    pub historical_prices: Vec<f64>,
+    pub historical_prices: Vec<u64>,
 }
 
 impl Stonk {
@@ -212,38 +212,47 @@ impl Stonk {
             .map(|(idx, t)| {
                 (
                     *t,
-                    self.historical_prices[self.historical_prices.len() + idx - x_ticks.len()],
+                    self.historical_prices[self.historical_prices.len() + idx - x_ticks.len()]
+                        as f64,
                 )
             })
             .collect::<Vec<(f64, f64)>>()
     }
 
     pub fn market_cap(&self) -> u32 {
-        self.price_per_share as u32 * self.number_of_shares as u32
+        self.price_per_share_in_cents as u32 * self.number_of_shares as u32
     }
 
     pub fn tick(&mut self) {
         let rng = &mut rand::thread_rng();
-        self.price_per_share = if rng.gen_bool((1.0 + self.drift) / 2.0) {
-            self.price_per_share * (1.0 + self.volatility)
+        self.price_per_share_in_cents = if rng.gen_bool((1.0 + self.drift) / 2.0) {
+            self.buy_price()
         } else {
-            self.price_per_share * (1.0 - self.volatility)
+            self.sell_price()
         };
-        self.historical_prices.push(self.price_per_share);
+        self.historical_prices.push(self.price_per_share_in_cents);
     }
 
     fn modified_price(&self) -> f64 {
         let modifier = (self.number_of_shares as f64
             / (self.number_of_shares - self.allocated_shares) as f64)
             .powf(0.25);
-        self.price_per_share * modifier as f64
+        self.price_per_share_in_cents as f64 * modifier
     }
 
-    pub fn buy_price(&self) -> f64 {
-        self.modified_price() * (1.0 + self.volatility)
+    fn buy_price(&self) -> u64 {
+        (self.modified_price() * (1.0 + self.volatility)) as u64
     }
 
-    pub fn sell_price(&self) -> f64 {
-        self.modified_price() * (1.0 - self.volatility)
+    fn sell_price(&self) -> u64 {
+        (self.modified_price() * (1.0 - self.volatility)) as u64
+    }
+
+    pub fn formatted_buy_price(&self) -> f64 {
+        self.buy_price() as f64 / 100.0
+    }
+
+    pub fn formatted_sell_price(&self) -> f64 {
+        self.sell_price() as f64 / 100.0
     }
 }
