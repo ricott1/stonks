@@ -22,6 +22,8 @@ use ratatui::{
     style::{Color, Modifier},
 };
 
+use crate::{ssh_server::TerminalHandle, utils::AppResult};
+
 /// A [`Backend`] implementation that uses [Crossterm] to render to the terminal.
 ///
 /// The `CrosstermBackend` struct is a wrapper around a writer implementing [`Write`], which is
@@ -76,17 +78,14 @@ use ratatui::{
 /// [`backend`]: crate::backend
 /// [Crossterm]: https://crates.io/crates/crossterm
 /// [examples]: https://github.com/ratatui-org/ratatui/tree/main/examples#examples
-#[derive(Debug, Default, Clone, Eq, PartialEq, Hash)]
-pub struct SSHBackend<W: Write> {
+#[derive(Debug, Clone)]
+pub struct SSHBackend {
     /// The writer used to send commands to the terminal.
-    writer: W,
+    writer: TerminalHandle,
     pub size: (u16, u16),
 }
 
-impl<W> SSHBackend<W>
-where
-    W: Write,
-{
+impl SSHBackend {
     /// Creates a new `CrosstermBackend` with the given writer.
     ///
     /// # Example
@@ -96,19 +95,16 @@ where
     /// # use ratatui::prelude::*;
     /// let backend = CrosstermBackend::new(stdout());
     /// ```
-    pub fn new(writer: W, size: (u16, u16)) -> SSHBackend<W> {
+    pub fn new(writer: TerminalHandle, size: (u16, u16)) -> SSHBackend {
         SSHBackend { writer, size }
     }
 
-    pub fn set_writer(&mut self, writer: W) {
-        self.writer = writer;
+    pub async fn close(&self) -> AppResult<()> {
+        self.writer.close().await
     }
 }
 
-impl<W> Write for SSHBackend<W>
-where
-    W: Write,
-{
+impl Write for SSHBackend {
     /// Writes a buffer of bytes to the underlying buffer.
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.writer.write(buf)
@@ -120,10 +116,7 @@ where
     }
 }
 
-impl<W> Backend for SSHBackend<W>
-where
-    W: Write,
-{
+impl Backend for SSHBackend {
     fn draw<'a, I>(&mut self, content: I) -> io::Result<()>
     where
         I: Iterator<Item = (u16, u16, &'a Cell)>,

@@ -6,7 +6,6 @@ use crate::ui::{Ui, UiDisplay, UiOptions};
 use crate::utils::AppResult;
 use async_trait::async_trait;
 use crossterm::event::KeyCode;
-use ratatui::layout::Rect;
 use russh::{server::*, Channel, ChannelId, CryptoVec, Disconnect, Pty};
 use russh_keys::key::PublicKey;
 use std::collections::HashMap;
@@ -55,6 +54,17 @@ impl Debug for TerminalHandle {
 }
 
 impl TerminalHandle {
+    pub async fn close(&self) -> AppResult<()> {
+        self.handle
+            .close(self.channel_id)
+            .await
+            .map_err(|_| anyhow::anyhow!("Close terminal error"))?;
+        self.handle
+            .disconnect(Disconnect::ByApplication, "Game quit".into(), "".into())
+            .await?;
+        Ok(())
+    }
+
     async fn _flush(&self) -> std::io::Result<usize> {
         let handle = self.handle.clone();
         let channel_id = self.channel_id.clone();
@@ -271,7 +281,7 @@ impl Handler for AppServer {
             };
 
             // let events = EventHandler::handler(false);
-            let backend = SSHBackend::new(terminal_handle, (120, 40));
+            let backend = SSHBackend::new(terminal_handle, (160, 48));
 
             let mut tui = Tui::new(backend)
                 .map_err(|e| anyhow::anyhow!("Failed to create terminal interface: {}", e))?;
@@ -311,9 +321,8 @@ impl Handler for AppServer {
         if let Some(client) = clients.get_mut(&self.id) {
             match key_event.code {
                 crossterm::event::KeyCode::Esc => {
+                    let _ = client.tui.exit().await;
                     clients.remove(&self.id);
-                    session.disconnect(Disconnect::ByApplication, "Game quit", "");
-                    session.close(channel);
                 }
                 _ => {
                     client
@@ -360,12 +369,7 @@ impl Handler for AppServer {
         if let Some(client) = clients.get_mut(&self.id) {
             client
                 .tui
-                .resize(Rect {
-                    x: 0,
-                    y: 0,
-                    width: col_width as u16,
-                    height: row_height as u16,
-                })
+                .resize(col_width as u16, row_height as u16)
                 .map_err(|e| anyhow::anyhow!("Resize error: {}", e))?;
         }
         Ok(())
@@ -385,6 +389,7 @@ fn convert_data_to_key_event(data: &[u8]) -> crossterm::event::KeyEvent {
         b"\x09" => crossterm::event::KeyCode::Tab,
         _ => crossterm::event::KeyCode::Char(data[0] as char),
     };
-
-    crossterm::event::KeyEvent::new(key, crossterm::event::KeyModifiers::empty())
+    let event = crossterm::event::KeyEvent::new(key, crossterm::event::KeyModifiers::empty());
+    println!("Got SSH data: {:?} -> {:?}", data, event);
+    event
 }

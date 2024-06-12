@@ -1,10 +1,10 @@
 use crate::agent::UserAgent;
 use crate::ssh_backend::SSHBackend;
-use crate::ssh_server::TerminalHandle;
 use crate::stonk::Market;
 use crate::ui::{Ui, UiOptions};
 use crate::utils::AppResult;
-use ratatui::layout::Rect;
+use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
+use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::Terminal;
 
 /// Representation of a terminal user interface.
@@ -14,15 +14,33 @@ use ratatui::Terminal;
 #[derive(Debug)]
 pub struct Tui {
     /// Interface to the Terminal.
-    pub terminal: Terminal<SSHBackend<TerminalHandle>>,
+    pub terminal: Terminal<SSHBackend>,
 }
 
 impl Tui {
     /// Constructs a new instance of [`Tui`].
-    pub fn new(backend: SSHBackend<TerminalHandle>) -> AppResult<Self> {
+    pub fn new(backend: SSHBackend) -> AppResult<Self> {
         let terminal = Terminal::new(backend)?;
-        let tui = Self { terminal };
+        let mut tui = Self { terminal };
+        tui.init()?;
+
         Ok(tui)
+    }
+
+    /// Initializes the terminal interface.
+    ///
+    /// It enables the raw mode and sets terminal properties.
+    fn init(&mut self) -> AppResult<()> {
+        terminal::enable_raw_mode()?;
+        crossterm::execute!(
+            self.terminal.backend_mut(),
+            EnterAlternateScreen,
+            EnableMouseCapture
+        )?;
+
+        self.terminal.hide_cursor()?;
+        self.terminal.clear()?;
+        Ok(())
     }
 
     /// [`Draw`] the terminal interface by [`rendering`] the widgets.
@@ -37,10 +55,6 @@ impl Tui {
         agent: &UserAgent,
         number_of_players: usize,
     ) -> AppResult<()> {
-        // match app.phase {
-        //     GamePhase::Day { .. } => self.terminal.clear()?,
-        //     GamePhase::Night { .. } => {}
-        // }
         self.terminal.draw(|frame| {
             ui.render(frame, market, ui_options, agent, number_of_players)
                 .expect("Failed rendering")
@@ -48,10 +62,34 @@ impl Tui {
         Ok(())
     }
 
-    pub fn resize(&mut self, rect: Rect) -> AppResult<()> {
-        self.terminal.resize(rect)?;
-        self.terminal.backend_mut().size = (rect.width, rect.height);
+    /// Resizes the terminal interface.
+    pub fn resize(&mut self, width: u16, height: u16) -> AppResult<()> {
+        self.terminal.backend_mut().size = (width, height);
         self.terminal.clear()?;
         Ok(())
+    }
+
+    /// Resets the terminal interface.
+    ///
+    /// This function is also used for the panic hook to revert
+    /// the terminal properties if unexpected errors occur.
+    fn reset(&mut self) -> AppResult<()> {
+        terminal::disable_raw_mode()?;
+        crossterm::execute!(
+            self.terminal.backend_mut(),
+            LeaveAlternateScreen,
+            DisableMouseCapture
+        )?;
+        Ok(())
+    }
+
+    /// Exits the terminal interface.
+    ///
+    /// It disables the raw mode and reverts back the terminal properties.
+    pub async fn exit(&mut self) -> AppResult<()> {
+        self.terminal.show_cursor()?;
+        self.reset()?;
+        self.terminal.clear()?;
+        self.terminal.backend().close().await
     }
 }
