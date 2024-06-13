@@ -5,7 +5,7 @@ use crate::tui::Tui;
 use crate::ui::{Ui, UiDisplay, UiOptions};
 use crate::utils::AppResult;
 use async_trait::async_trait;
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyModifiers};
 use russh::{server::*, Channel, ChannelId, CryptoVec, Disconnect, Pty};
 use russh_keys::key::PublicKey;
 use std::collections::HashMap;
@@ -302,6 +302,14 @@ impl Handler for AppServer {
         Ok(true)
     }
 
+    async fn auth_none(&mut self, user: &str) -> Result<Auth, Self::Error> {
+        Ok(Auth::Accept)
+    }
+
+    async fn auth_password(&mut self, user: &str, password: &str) -> Result<Auth, Self::Error> {
+        Ok(Auth::Accept)
+    }
+
     async fn auth_publickey(
         &mut self,
         _user: &str,
@@ -316,23 +324,26 @@ impl Handler for AppServer {
         data: &[u8],
         session: &mut Session,
     ) -> Result<(), Self::Error> {
-        let key_event = convert_data_to_key_event(data);
         let mut clients = self.clients.lock().await;
         if let Some(client) = clients.get_mut(&self.id) {
-            match key_event.code {
-                crossterm::event::KeyCode::Esc => {
-                    client
-                        .tui
-                        .exit()
-                        .await
-                        .unwrap_or_else(|e| println!("Error exiting tui: {}", e));
-                    clients.remove(&self.id);
-                }
-                _ => {
-                    client
-                        .handle_key_events(key_event.code)
-                        .map_err(|e| anyhow::anyhow!("Error: {}", e))?;
-                }
+            match convert_data_to_crossterm_event(data) {
+                Some(crossterm::event::Event::Mouse(..)) => {}
+                Some(crossterm::event::Event::Key(key_event)) => match key_event.code {
+                    crossterm::event::KeyCode::Esc => {
+                        client
+                            .tui
+                            .exit()
+                            .await
+                            .unwrap_or_else(|e| println!("Error exiting tui: {}", e));
+                        clients.remove(&self.id);
+                    }
+                    _ => {
+                        client
+                            .handle_key_events(key_event.code)
+                            .map_err(|e| anyhow::anyhow!("Error: {}", e))?;
+                    }
+                },
+                _ => {}
             }
         } else {
             session.disconnect(Disconnect::ByApplication, "Game quit", "");
@@ -380,20 +391,67 @@ impl Handler for AppServer {
     }
 }
 
-fn convert_data_to_key_event(data: &[u8]) -> crossterm::event::KeyEvent {
+fn convert_data_to_key_event(data: &[u8]) -> Option<crossterm::event::KeyEvent> {
     let key = match data {
-        b"\x1b[A" => crossterm::event::KeyCode::Up,
-        b"\x1b[B" => crossterm::event::KeyCode::Down,
-        b"\x1b[C" => crossterm::event::KeyCode::Right,
-        b"\x1b[D" => crossterm::event::KeyCode::Left,
+        b"\x1b\x5b\x41" => crossterm::event::KeyCode::Up,
+        b"\x1b\x5b\x42" => crossterm::event::KeyCode::Down,
+        b"\x1b\x5b\x43" => crossterm::event::KeyCode::Right,
+        b"\x1b\x5b\x44" => crossterm::event::KeyCode::Left,
         b"\x03" | b"\x1b" => crossterm::event::KeyCode::Esc, // Ctrl-C is also sent as Esc
         b"\x0d" => crossterm::event::KeyCode::Enter,
         b"\x7f" => crossterm::event::KeyCode::Backspace,
         b"\x1b[3~" => crossterm::event::KeyCode::Delete,
         b"\x09" => crossterm::event::KeyCode::Tab,
-        _ => crossterm::event::KeyCode::Char(data[0] as char),
+        x if x.len() == 0 => crossterm::event::KeyCode::Char(data[0] as char),
+
+        _ => {
+            return None;
+        }
     };
     let event = crossterm::event::KeyEvent::new(key, crossterm::event::KeyModifiers::empty());
-    println!("Got SSH data: {:?} -> {:?}", data, event);
-    event
+
+    Some(event)
+}
+
+fn convert_data_to_mouse_event(data: &[u8]) -> Option<crossterm::event::MouseEvent> {
+    //     33 35 3b//movement
+    //     30 3b //click/release (ends in 6d rather than 4d (+32 to last byte))
+    //     data: [27, 91, 60, 54, 52, 59, 53, 59, 51, 50, 77] 1b 5b 3c 36 34 3b 35 3b 33 32 4d //scrollup
+    // data: [27, 91, 60, 54, 53, 59, 53, 59, 51, 50, 77] 1b 5b 3c 36 35 3b 35 3b 33 32 4d //scrolldown
+    //     let event = if data.starts_with(&[27, 91, 60, 51, 53, 59]) {
+    //         crossterm::event::MouseEvent {
+    //             kind: crossterm::event::MouseEventKind::Moved,
+    //             column: 16,
+    //             row:16,
+    //             modifiers: KeyModifiers::empty()
+    //         }
+    //     } else if data.starts_with(&[27, 91, 60, 48, 59]) {
+    //         crossterm::event::MouseEvent {
+    //             kind: crossterm::event::MouseEventKind::Down(()),
+    //             column: 16,
+    //             row:16,
+    //             modifiers: KeyModifiers::empty()
+    //         }
+    //     }
+
+    None
+}
+
+fn convert_data_to_crossterm_event(data: &[u8]) -> Option<crossterm::event::Event> {
+    println!(
+        "data: {:?} {}",
+        data,
+        data.iter().map(|b| format!("{:x} ", b)).collect::<String>()
+    );
+    if data.starts_with(&[27, 91, 60]) {
+        if let Some(event) = convert_data_to_mouse_event(data) {
+            return Some(crossterm::event::Event::Mouse(event));
+        }
+    } else {
+        if let Some(event) = convert_data_to_key_event(data) {
+            return Some(crossterm::event::Event::Key(event));
+        }
+    }
+
+    None
 }
