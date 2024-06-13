@@ -444,18 +444,16 @@ fn convert_data_to_crossterm_event(data: &[u8]) -> Option<crossterm::event::Even
     //     data,
     //     data.iter().map(|b| format!("{:x} ", b)).collect::<String>()
     // );
-    if let Some(event) = convert_data_to_key_event(data) {
-        return Some(crossterm::event::Event::Key(event));
+
+    if data.starts_with(&[27, 91, 60]) {
+        if let Some(event) = convert_data_to_mouse_event(data) {
+            return Some(crossterm::event::Event::Mouse(event));
+        }
+    } else {
+        if let Some(event) = convert_data_to_key_event(data) {
+            return Some(crossterm::event::Event::Key(event));
+        }
     }
-    // if data.starts_with(&[27, 91, 60]) {
-    //     if let Some(event) = convert_data_to_mouse_event(data) {
-    //         return Some(crossterm::event::Event::Mouse(event));
-    //     }
-    // } else {
-    //     if let Some(event) = convert_data_to_key_event(data) {
-    //         return Some(crossterm::event::Event::Key(event));
-    //     }
-    // }
 
     None
 }
