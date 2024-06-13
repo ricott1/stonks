@@ -326,7 +326,9 @@ impl Handler for AppServer {
     ) -> Result<(), Self::Error> {
         let mut clients = self.clients.lock().await;
         if let Some(client) = clients.get_mut(&self.id) {
-            match convert_data_to_crossterm_event(data) {
+            let event = convert_data_to_crossterm_event(data);
+            println!("{:?}", event);
+            match event {
                 Some(crossterm::event::Event::Mouse(..)) => {}
                 Some(crossterm::event::Event::Key(key_event)) => match key_event.code {
                     crossterm::event::KeyCode::Esc => {
@@ -402,8 +404,7 @@ fn convert_data_to_key_event(data: &[u8]) -> Option<crossterm::event::KeyEvent> 
         b"\x7f" => crossterm::event::KeyCode::Backspace,
         b"\x1b[3~" => crossterm::event::KeyCode::Delete,
         b"\x09" => crossterm::event::KeyCode::Tab,
-        x if x.len() == 0 => crossterm::event::KeyCode::Char(data[0] as char),
-
+        x if x.len() == 1 => crossterm::event::KeyCode::Char(data[0] as char),
         _ => {
             return None;
         }
@@ -438,20 +439,23 @@ fn convert_data_to_mouse_event(data: &[u8]) -> Option<crossterm::event::MouseEve
 }
 
 fn convert_data_to_crossterm_event(data: &[u8]) -> Option<crossterm::event::Event> {
-    println!(
-        "data: {:?} {}",
-        data,
-        data.iter().map(|b| format!("{:x} ", b)).collect::<String>()
-    );
-    if data.starts_with(&[27, 91, 60]) {
-        if let Some(event) = convert_data_to_mouse_event(data) {
-            return Some(crossterm::event::Event::Mouse(event));
-        }
-    } else {
-        if let Some(event) = convert_data_to_key_event(data) {
-            return Some(crossterm::event::Event::Key(event));
-        }
+    // println!(
+    //     "data: {:?} {}",
+    //     data,
+    //     data.iter().map(|b| format!("{:x} ", b)).collect::<String>()
+    // );
+    if let Some(event) = convert_data_to_key_event(data) {
+        return Some(crossterm::event::Event::Key(event));
     }
+    // if data.starts_with(&[27, 91, 60]) {
+    //     if let Some(event) = convert_data_to_mouse_event(data) {
+    //         return Some(crossterm::event::Event::Mouse(event));
+    //     }
+    // } else {
+    //     if let Some(event) = convert_data_to_key_event(data) {
+    //         return Some(crossterm::event::Event::Key(event));
+    //     }
+    // }
 
     None
 }
