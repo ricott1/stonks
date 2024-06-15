@@ -1,6 +1,5 @@
 use crossterm::event::KeyCode;
 use rand::Rng;
-use ratatui::style::{Style, Stylize};
 use std::collections::HashMap;
 
 use crate::{
@@ -176,17 +175,6 @@ pub enum StonkClass {
     War,
     Commodity,
     Technology,
-}
-
-impl StonkClass {
-    pub fn style(&self) -> Style {
-        match self {
-            StonkClass::Media => Style::default().cyan(),
-            StonkClass::War => Style::default().red(),
-            StonkClass::Commodity => Style::default().magenta(),
-            StonkClass::Technology => Style::default().green(),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]

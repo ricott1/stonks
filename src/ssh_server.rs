@@ -18,7 +18,7 @@ use tokio::sync::Mutex;
 use tracing::debug;
 
 const SERVER_SSH_PORT: u16 = 3333;
-const MAX_TIMEOUT_SECONDS: u64 = 120;
+const MAX_TIMEOUT_SECONDS: u64 = 1200;
 
 pub fn save_keys(signing_key: &ed25519_dalek::SigningKey) -> AppResult<()> {
     let file = File::create::<&str>("./keys".into())?;
@@ -191,6 +191,7 @@ impl AppServer {
                 tokio::time::sleep(tokio::time::Duration::from_millis(250)).await;
 
                 let mut clients = clients.lock().await;
+                println!("{} clients", clients.len());
                 let number_of_players = clients.len();
                 let mut market = market.lock().await;
 
