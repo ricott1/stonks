@@ -120,23 +120,23 @@ impl Client {
                 self.ui_options.max_y_bound += 10;
             }
 
-            crossterm::event::KeyCode::Char('0') => {
+            crossterm::event::KeyCode::Char('1') => {
                 self.ui_options.focus_on_stonk = Some(0);
             }
 
-            crossterm::event::KeyCode::Char('1') => {
+            crossterm::event::KeyCode::Char('2') => {
                 self.ui_options.focus_on_stonk = Some(1);
             }
 
-            crossterm::event::KeyCode::Char('2') => {
+            crossterm::event::KeyCode::Char('3') => {
                 self.ui_options.focus_on_stonk = Some(2);
             }
 
-            crossterm::event::KeyCode::Char('3') => {
+            crossterm::event::KeyCode::Char('4') => {
                 self.ui_options.focus_on_stonk = Some(3);
             }
 
-            crossterm::event::KeyCode::Char('4') => {
+            crossterm::event::KeyCode::Char('5') => {
                 self.ui_options.focus_on_stonk = Some(4);
             }
 
