@@ -104,44 +104,27 @@ impl Client {
         match key_code {
             crossterm::event::KeyCode::Char('c') => {
                 self.tui.terminal.clear()?;
+                self.ui_options.reset();
             }
+            crossterm::event::KeyCode::Down => self.ui_options.min_y_bound_offset -= 10,
+
+            crossterm::event::KeyCode::Up => self.ui_options.min_y_bound_offset += 10,
+
             crossterm::event::KeyCode::Left => {
-                if self.ui_options.min_y_bound > 10 {
-                    self.ui_options.min_y_bound -= 10;
-                    self.ui_options.max_y_bound -= 10;
-                } else {
-                    self.ui_options.min_y_bound = 0;
-                    self.ui_options.max_y_bound = 100;
-                }
+                self.ui_options.bound_spread =
+                    self.ui_options.bound_spread.checked_sub(1).unwrap_or(0)
             }
 
             crossterm::event::KeyCode::Right => {
-                self.ui_options.min_y_bound += 10;
-                self.ui_options.max_y_bound += 10;
-            }
-
-            crossterm::event::KeyCode::Char('1') => {
-                self.ui_options.focus_on_stonk = Some(0);
-            }
-
-            crossterm::event::KeyCode::Char('2') => {
-                self.ui_options.focus_on_stonk = Some(1);
-            }
-
-            crossterm::event::KeyCode::Char('3') => {
-                self.ui_options.focus_on_stonk = Some(2);
-            }
-
-            crossterm::event::KeyCode::Char('4') => {
-                self.ui_options.focus_on_stonk = Some(3);
-            }
-
-            crossterm::event::KeyCode::Char('5') => {
-                self.ui_options.focus_on_stonk = Some(4);
+                self.ui_options.bound_spread = self
+                    .ui_options
+                    .bound_spread
+                    .checked_add(1)
+                    .unwrap_or(u8::MAX)
             }
 
             crossterm::event::KeyCode::Enter => {
-                self.ui_options.focus_on_stonk = None;
+                self.ui_options.reset();
             }
 
             crossterm::event::KeyCode::Char('p') => self.ui_options.display = UiDisplay::Portfolio,
@@ -165,7 +148,18 @@ impl Client {
                 }
             }
 
-            _ => {}
+            _ => {
+                for idx in 1..9 {
+                    if key_code
+                        == crossterm::event::KeyCode::Char(
+                            format!("{idx}").chars().next().unwrap_or_default(),
+                        )
+                    {
+                        self.ui_options.reset();
+                        self.ui_options.focus_on_stonk = Some(idx - 1);
+                    }
+                }
+            }
         }
         Ok(())
     }
@@ -327,7 +321,7 @@ impl Handler for AppServer {
         let mut clients = self.clients.lock().await;
         if let Some(client) = clients.get_mut(&self.id) {
             let event = convert_data_to_crossterm_event(data);
-            println!("{:?}", event);
+            // println!("{:?}", event);
             match event {
                 Some(crossterm::event::Event::Mouse(..)) => {}
                 Some(crossterm::event::Event::Key(key_event)) => match key_event.code {

@@ -24,8 +24,8 @@ pub enum UiDisplay {
 }
 #[derive(Debug, Clone, Copy)]
 pub struct UiOptions {
-    pub min_y_bound: u16,
-    pub max_y_bound: u16,
+    pub min_y_bound_offset: i32,
+    pub bound_spread: u8,
     pub focus_on_stonk: Option<usize>,
     pub display: UiDisplay,
 }
@@ -33,11 +33,17 @@ pub struct UiOptions {
 impl UiOptions {
     pub fn new() -> Self {
         UiOptions {
-            min_y_bound: 40,
-            max_y_bound: 140,
+            min_y_bound_offset: 0,
+            bound_spread: 0,
             focus_on_stonk: None,
             display: UiDisplay::Stonks,
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.focus_on_stonk = None;
+        self.min_y_bound_offset = 0;
+        self.bound_spread = 0;
     }
 }
 
@@ -80,6 +86,8 @@ impl<'a> Ui<'a> {
             Style::default().red(),
             Style::default().yellow(),
             Style::default().blue(),
+            Style::default().white(),
+            Style::default().light_magenta(),
         ];
 
         let mut x_ticks = x_ticks(market);
@@ -124,34 +132,45 @@ impl<'a> Ui<'a> {
             })
             .collect::<Vec<Dataset>>();
 
-        let mut min_y_bound = ui_options.min_y_bound;
-        let mut max_y_bound = ui_options.max_y_bound;
+        let mut min_y_bound = 0;
+        let mut max_y_bound = 200;
         if let Some(stonk_id) = ui_options.focus_on_stonk {
-            if let Some(stonk) = market.stonks.get(&stonk_id) {
-                let min_price = stonk
-                    .historical_prices
-                    .iter()
-                    .min()
-                    .copied()
-                    .unwrap_or_default();
-                let max_price = stonk
-                    .historical_prices
-                    .iter()
-                    .max()
-                    .copied()
-                    .unwrap_or_default();
-                if min_price < 2000 {
-                    min_y_bound = 0;
-                } else {
-                    min_y_bound = min_price as u16 / 2000 * 20 - 10;
-                }
-                if max_price < 2000 {
-                    max_y_bound = 40;
-                } else {
-                    max_y_bound = max_price as u16 / 2000 * 20 + 10;
-                }
+            let min_price = datas[stonk_id]
+                .iter()
+                .map(|(_, d)| *d as u64)
+                .min()
+                .unwrap_or_default();
+            let max_price = datas[stonk_id]
+                .iter()
+                .map(|(_, d)| *d as u64)
+                .max()
+                .unwrap_or_default();
+            if min_price < 20 {
+                min_y_bound = 0;
+            } else {
+                min_y_bound = min_price as u16 / 20 * 20 - 20;
             }
+            if max_price < 20 {
+                max_y_bound = 40;
+            } else {
+                max_y_bound = max_price as u16 / 20 * 20 + 20;
+            }
+            println!("min bound {}, max bound {}", min_y_bound, max_y_bound);
         }
+
+        if ui_options.min_y_bound_offset >= 0 {
+            min_y_bound += ui_options.min_y_bound_offset as u16;
+            max_y_bound += ui_options.min_y_bound_offset as u16;
+        } else {
+            let offset = ((-ui_options.min_y_bound_offset) as u16).min(min_y_bound);
+            min_y_bound -= offset;
+            max_y_bound -= offset;
+        }
+
+        let spread = (1.1_f64).powf(ui_options.bound_spread as f64);
+
+        min_y_bound = (min_y_bound as f64 / spread) as u16;
+        max_y_bound = (max_y_bound as f64 * spread) as u16;
 
         let avg_bound = (min_y_bound + max_y_bound) / 2;
 

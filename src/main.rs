@@ -57,6 +57,22 @@ async fn main() -> AppResult<()> {
         0.001,
     );
     app.new_stonk(StonkClass::War, "Cubbit".into(), 12000, 10000, 0.000, 0.001);
+    app.new_stonk(
+        StonkClass::Commodity,
+        "Yuppies we are".into(),
+        120000,
+        7000,
+        0.000,
+        0.001,
+    );
+    app.new_stonk(
+        StonkClass::Commodity,
+        "Tubbic".into(),
+        12000,
+        10000,
+        0.000,
+        0.001,
+    );
 
     println!("Started Market with {} stonks!", app.stonks.len());
 
