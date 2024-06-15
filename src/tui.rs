@@ -3,8 +3,6 @@ use crate::ssh_backend::SSHBackend;
 use crate::stonk::Market;
 use crate::ui::{Ui, UiOptions};
 use crate::utils::AppResult;
-use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
-use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::Terminal;
 
 /// Representation of a terminal user interface.
@@ -31,12 +29,6 @@ impl Tui {
     ///
     /// It enables the raw mode and sets terminal properties.
     fn init(&mut self) -> AppResult<()> {
-        // crossterm::execute!(
-        //     self.terminal.backend_mut(),
-        //     EnterAlternateScreen,
-        //     EnableMouseCapture
-        // )?;
-
         self.terminal.clear()?;
         Ok(())
     }
@@ -73,11 +65,6 @@ impl Tui {
     /// the terminal properties if unexpected errors occur.
     fn reset(&mut self) -> AppResult<()> {
         self.terminal.clear()?;
-        // crossterm::execute!(
-        //     self.terminal.backend_mut(),
-        //     LeaveAlternateScreen,
-        //     DisableMouseCapture
-        // )?;
         Ok(())
     }
 

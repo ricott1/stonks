@@ -71,7 +71,7 @@ impl Market {
             number_of_shares,
             allocated_shares: 0,
             drift,
-            drift_volatility: 0.005,
+            drift_volatility: 0.00025,
             volatility: volatility.max(0.001).min(0.99),
             historical_prices: vec![price_per_share_in_cents],
         };
@@ -84,7 +84,7 @@ impl Market {
     pub fn tick_day(&mut self) {
         let rng = &mut rand::thread_rng();
         if self.last_tick % PHASE_LENGTH == 0 {
-            self.global_trend = rng.gen_range(-0.2..0.2);
+            self.global_trend = rng.gen_range(-0.02..0.02);
         }
         for (_, stonk) in self.stonks.iter_mut() {
             stonk.drift += (self.global_trend - stonk.drift) * rng.gen_range(0.25..0.75);
@@ -160,7 +160,9 @@ impl StonkMarket for Market {
                 None => {}
             },
             GamePhase::Night { .. } => {
-                return Err("No actions allowed during noght".into());
+                if agent.selected_action().is_some() {
+                    return Err("No actions allowed during night".into());
+                }
             }
         }
 

@@ -21,8 +21,8 @@ async fn main() -> AppResult<()> {
         "Cassius INC".into(),
         9800,
         2500,
-        0.01,
-        0.025,
+        0.005,
+        0.015,
     );
     app.new_stonk(
         StonkClass::Technology,
@@ -46,7 +46,15 @@ async fn main() -> AppResult<()> {
         9000,
         10000,
         0.000,
-        0.01,
+        0.0075,
+    );
+    app.new_stonk(
+        StonkClass::Technology,
+        "Mariottide".into(),
+        80000,
+        1000,
+        0.000,
+        0.001,
     );
 
     println!("Started Market with {} stonks!", app.stonks.len());

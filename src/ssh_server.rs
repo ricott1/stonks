@@ -302,11 +302,11 @@ impl Handler for AppServer {
         Ok(true)
     }
 
-    async fn auth_none(&mut self, user: &str) -> Result<Auth, Self::Error> {
+    async fn auth_none(&mut self, _: &str) -> Result<Auth, Self::Error> {
         Ok(Auth::Accept)
     }
 
-    async fn auth_password(&mut self, user: &str, password: &str) -> Result<Auth, Self::Error> {
+    async fn auth_password(&mut self, _: &str, _: &str) -> Result<Auth, Self::Error> {
         Ok(Auth::Accept)
     }
 
@@ -414,37 +414,79 @@ fn convert_data_to_key_event(data: &[u8]) -> Option<crossterm::event::KeyEvent> 
     Some(event)
 }
 
-fn convert_data_to_mouse_event(data: &[u8]) -> Option<crossterm::event::MouseEvent> {
-    //     33 35 3b//movement
-    //     30 3b //click/release (ends in 6d rather than 4d (+32 to last byte))
-    //     data: [27, 91, 60, 54, 52, 59, 53, 59, 51, 50, 77] 1b 5b 3c 36 34 3b 35 3b 33 32 4d //scrollup
-    // data: [27, 91, 60, 54, 53, 59, 53, 59, 51, 50, 77] 1b 5b 3c 36 35 3b 35 3b 33 32 4d //scrolldown
-    //     let event = if data.starts_with(&[27, 91, 60, 51, 53, 59]) {
-    //         crossterm::event::MouseEvent {
-    //             kind: crossterm::event::MouseEventKind::Moved,
-    //             column: 16,
-    //             row:16,
-    //             modifiers: KeyModifiers::empty()
-    //         }
-    //     } else if data.starts_with(&[27, 91, 60, 48, 59]) {
-    //         crossterm::event::MouseEvent {
-    //             kind: crossterm::event::MouseEventKind::Down(()),
-    //             column: 16,
-    //             row:16,
-    //             modifiers: KeyModifiers::empty()
-    //         }
-    //     }
+fn decode_sgr_mouse_input(ansi_code: Vec<u8>) -> AppResult<(u8, u16, u16)> {
+    // Convert u8 vector to a String
+    let ansi_str = String::from_utf8(ansi_code.clone()).map_err(|_| "Invalid UTF-8 sequence")?;
 
-    None
+    // Check the prefix
+    if !ansi_str.starts_with("\x1b[<") {
+        return Err("Invalid SGR ANSI mouse code".into());
+    }
+
+    let cb_mod = if ansi_str.ends_with('M') {
+        0
+    } else if ansi_str.ends_with('m') {
+        3
+    } else {
+        return Err("Invalid SGR ANSI mouse code".into());
+    };
+
+    // Remove the prefix '\x1b[<' and trailing 'M'
+    let code_body = &ansi_str[3..ansi_str.len() - 1];
+
+    // Split the components
+    let components: Vec<&str> = code_body.split(';').collect();
+
+    if components.len() != 3 {
+        return Err("Invalid SGR ANSI mouse code format".into());
+    }
+
+    // Parse the components
+    let cb = cb_mod
+        + components[0]
+            .parse::<u8>()
+            .map_err(|_| "Failed to parse Cb")?;
+    let cx = components[1]
+        .parse::<u16>()
+        .map_err(|_| "Failed to parse Cx")?;
+    let cy = components[2]
+        .parse::<u16>()
+        .map_err(|_| "Failed to parse Cy")?;
+
+    Ok((cb, cx, cy))
+}
+
+fn convert_data_to_mouse_event(data: &[u8]) -> Option<crossterm::event::MouseEvent> {
+    let (cb, column, row) = decode_sgr_mouse_input(data.to_vec()).ok()?;
+    let kind = match cb {
+        0 => crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+        1 => crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Middle),
+        2 => crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Right),
+        3 => crossterm::event::MouseEventKind::Up(crossterm::event::MouseButton::Left),
+        32 => crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left),
+        33 => crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Middle),
+        34 => crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Right),
+        35 => crossterm::event::MouseEventKind::Moved,
+        64 => crossterm::event::MouseEventKind::ScrollUp,
+        65 => crossterm::event::MouseEventKind::ScrollDown,
+        96..=255 => {
+            println!("cb {}", cb);
+            return None;
+        }
+        _ => return None,
+    };
+
+    let event = crossterm::event::MouseEvent {
+        kind,
+        column,
+        row,
+        modifiers: KeyModifiers::empty(),
+    };
+
+    Some(event)
 }
 
 fn convert_data_to_crossterm_event(data: &[u8]) -> Option<crossterm::event::Event> {
-    // println!(
-    //     "data: {:?} {}",
-    //     data,
-    //     data.iter().map(|b| format!("{:x} ", b)).collect::<String>()
-    // );
-
     if data.starts_with(&[27, 91, 60]) {
         if let Some(event) = convert_data_to_mouse_event(data) {
             return Some(crossterm::event::Event::Mouse(event));
