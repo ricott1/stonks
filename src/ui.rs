@@ -117,7 +117,7 @@ impl<'a> Ui<'a> {
             .map(|(idx, (_, stonk))| {
                 Dataset::default()
                     .graph_type(GraphType::Line)
-                    .name(format!("{}: {}", idx, stonk.name.clone()))
+                    .name(format!("{}: {}", idx + 1, stonk.name.clone()))
                     .marker(symbols::Marker::HalfBlock)
                     .style(styles[idx])
                     .data(&datas[idx])
