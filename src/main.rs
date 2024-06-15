@@ -41,7 +41,7 @@ async fn main() -> AppResult<()> {
         0.005,
     );
     app.new_stonk(
-        StonkClass::Technology,
+        StonkClass::Media,
         "Riccardino".into(),
         9000,
         10000,
@@ -49,13 +49,14 @@ async fn main() -> AppResult<()> {
         0.0075,
     );
     app.new_stonk(
-        StonkClass::Technology,
+        StonkClass::War,
         "Mariottide".into(),
         80000,
         1000,
         0.000,
         0.001,
     );
+    app.new_stonk(StonkClass::War, "Cubbit".into(), 12000, 10000, 0.000, 0.001);
 
     println!("Started Market with {} stonks!", app.stonks.len());
 
