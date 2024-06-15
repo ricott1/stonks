@@ -191,8 +191,11 @@ impl AppServer {
                 tokio::time::sleep(tokio::time::Duration::from_millis(250)).await;
 
                 let mut clients = clients.lock().await;
-                println!("{} clients", clients.len());
                 let number_of_players = clients.len();
+
+                if number_of_players > 0 {
+                    println!("{} clients", number_of_players);
+                }
                 let mut market = market.lock().await;
 
                 market.tick();
