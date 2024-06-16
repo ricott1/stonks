@@ -298,15 +298,15 @@ impl Stonk {
         self.price_per_share_in_cents = cau.sample(rng) as u64;
 
         //calculate price drift. A negative value indicates that the stonk is losing value, positive viceversa.
-        let price_drift = self.price_per_share_in_cents
+        let price_drift = self.price_per_share_in_cents as f64
             - self
                 .historical_prices
                 .iter()
                 .last()
                 .copied()
-                .unwrap_or_default();
+                .unwrap_or_default() as f64;
 
-        self.drift += price_drift as f64 / 100.0 * rng.gen_range(0.25..0.75);
+        self.drift += price_drift / 100.0 * rng.gen_range(0.25..0.75);
         self.historical_prices.push(self.price_per_share_in_cents);
     }
 
