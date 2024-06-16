@@ -1,11 +1,9 @@
-use crossterm::event::KeyCode;
-use rand::Rng;
-use std::collections::HashMap;
-
 use crate::{
     agent::{AgentAction, DecisionAgent},
     utils::AppResult,
 };
+use crossterm::event::KeyCode;
+use rand::Rng;
 
 #[derive(Debug, Clone, Copy)]
 pub enum GamePhase {
@@ -14,6 +12,7 @@ pub enum GamePhase {
 }
 
 const PHASE_LENGTH: u64 = 240;
+const HISTORICAL_SIZE: usize = 500;
 
 pub trait StonkMarket {
     fn tick(&mut self);
@@ -22,19 +21,92 @@ pub trait StonkMarket {
 
 #[derive(Debug, Clone)]
 pub struct Market {
-    pub stonks: HashMap<usize, Stonk>,
+    pub stonks: [Stonk; 8],
     pub last_tick: u64,
-    pub historical_size: usize,
     pub global_trend: f64,
     pub phase: GamePhase,
 }
 
 impl Market {
     pub fn new() -> Self {
+        let stonks = [
+            Market::new_stonk(
+                0,
+                StonkClass::Technology,
+                "Cassius INC".into(),
+                9800,
+                2500,
+                0.005,
+                0.015,
+            ),
+            Market::new_stonk(
+                1,
+                StonkClass::Technology,
+                "Tesla".into(),
+                10000,
+                250,
+                0.0,
+                0.01,
+            ),
+            Market::new_stonk(
+                2,
+                StonkClass::Commodity,
+                "Rovanti".into(),
+                8000,
+                250,
+                0.005,
+                0.005,
+            ),
+            Market::new_stonk(
+                3,
+                StonkClass::Media,
+                "Riccardino".into(),
+                9000,
+                10000,
+                0.000,
+                0.0075,
+            ),
+            Market::new_stonk(
+                4,
+                StonkClass::War,
+                "Mariottide".into(),
+                80000,
+                1000,
+                0.000,
+                0.001,
+            ),
+            Market::new_stonk(
+                5,
+                StonkClass::War,
+                "Cubbit".into(),
+                12000,
+                10000,
+                0.000,
+                0.001,
+            ),
+            Market::new_stonk(
+                6,
+                StonkClass::Commodity,
+                "Yuppies we are".into(),
+                120000,
+                7000,
+                0.000,
+                0.001,
+            ),
+            Market::new_stonk(
+                7,
+                StonkClass::Commodity,
+                "Tubbic".into(),
+                12000,
+                10000,
+                0.000,
+                0.001,
+            ),
+        ];
+
         Market {
-            stonks: HashMap::new(),
+            stonks,
             last_tick: 1,
-            historical_size: 500,
             global_trend: 0.0,
             phase: GamePhase::Day {
                 counter: PHASE_LENGTH,
@@ -54,16 +126,16 @@ impl Market {
     }
 
     pub fn new_stonk(
-        &mut self,
+        id: usize,
         class: StonkClass,
         name: String,
         price_per_share_in_cents: u64,
         number_of_shares: u32,
         drift: f64,
         volatility: f64,
-    ) {
+    ) -> Stonk {
         let mut s = Stonk {
-            id: self.stonks.len(),
+            id,
             class,
             name,
             price_per_share_in_cents,
@@ -74,10 +146,21 @@ impl Market {
             volatility: volatility.max(0.001).min(0.99),
             historical_prices: vec![price_per_share_in_cents],
         };
-        for _ in 0..self.historical_size {
+        for _ in 0..HISTORICAL_SIZE {
             s.tick();
         }
-        self.stonks.insert(s.id, s);
+
+        s
+    }
+
+    pub fn x_ticks(&self) -> Vec<f64> {
+        let min_tick = if self.last_tick > HISTORICAL_SIZE as u64 {
+            self.last_tick - HISTORICAL_SIZE as u64
+        } else {
+            0
+        };
+
+        (min_tick..self.last_tick).map(|t| t as f64).collect()
     }
 
     pub fn tick_day(&mut self) {
@@ -85,10 +168,10 @@ impl Market {
         if self.last_tick % PHASE_LENGTH == 0 {
             self.global_trend = rng.gen_range(-0.02..0.02);
         }
-        for (_, stonk) in self.stonks.iter_mut() {
+        for stonk in self.stonks.iter_mut() {
             stonk.drift += (self.global_trend - stonk.drift) * rng.gen_range(0.25..0.75);
             stonk.tick();
-            while stonk.historical_prices.len() > self.historical_size {
+            while stonk.historical_prices.len() > HISTORICAL_SIZE {
                 stonk.historical_prices.remove(0);
             }
         }
@@ -135,25 +218,23 @@ impl StonkMarket for Market {
             GamePhase::Day { .. } => match agent.selected_action() {
                 Some(action) => match action {
                     AgentAction::Buy { stonk_id, amount } => {
-                        if let Some(stonk) = self.stonks.get_mut(&stonk_id) {
-                            if stonk.number_of_shares == stonk.allocated_shares {
-                                return Err("No more shares available".into());
-                            }
-                            let cost = stonk.buy_price() * amount;
-                            agent.sub_cash(cost)?;
-                            agent.add_stonk(stonk_id, amount)?;
-                            stonk.allocated_shares += 1;
-                            stonk.drift = (stonk.drift + stonk.drift_volatility).min(1.0);
+                        let stonk = &mut self.stonks[stonk_id];
+                        if stonk.number_of_shares == stonk.allocated_shares {
+                            return Err("No more shares available".into());
                         }
+                        let cost = stonk.buy_price() * amount;
+                        agent.sub_cash(cost)?;
+                        agent.add_stonk(stonk_id, amount)?;
+                        stonk.allocated_shares += 1;
+                        stonk.drift = (stonk.drift + stonk.drift_volatility).min(1.0);
                     }
                     AgentAction::Sell { stonk_id, amount } => {
-                        if let Some(stonk) = self.stonks.get_mut(&stonk_id) {
-                            let cost = stonk.sell_price() * amount;
-                            agent.sub_stonk(stonk_id, amount)?;
-                            agent.add_cash(cost)?;
-                            stonk.allocated_shares -= 1;
-                            stonk.drift = (stonk.drift - stonk.drift_volatility).max(-1.0);
-                        }
+                        let stonk = &mut self.stonks[stonk_id];
+                        let cost = stonk.sell_price() * amount;
+                        agent.sub_stonk(stonk_id, amount)?;
+                        agent.add_cash(cost)?;
+                        stonk.allocated_shares -= 1;
+                        stonk.drift = (stonk.drift - stonk.drift_volatility).max(-1.0);
                     }
                 },
                 None => {}

@@ -1,7 +1,7 @@
 use crate::agent::UserAgent;
 use crate::ssh_backend::SSHBackend;
 use crate::stonk::Market;
-use crate::ui::{Ui, UiOptions};
+use crate::ui::{render, UiOptions};
 use crate::utils::AppResult;
 use ratatui::Terminal;
 
@@ -39,15 +39,13 @@ impl Tui {
     /// [`rendering`]: crate::ui:render
     pub fn draw(
         &mut self,
-        ui: &mut Ui,
         market: &Market,
         ui_options: UiOptions,
         agent: &UserAgent,
         number_of_players: usize,
     ) -> AppResult<()> {
         self.terminal.draw(|frame| {
-            ui.render(frame, market, ui_options, agent, number_of_players)
-                .expect("Failed rendering")
+            render(frame, market, ui_options, agent, number_of_players).expect("Failed rendering")
         })?;
         Ok(())
     }

@@ -2,7 +2,7 @@ use crate::agent::{AgentAction, DecisionAgent, UserAgent};
 use crate::ssh_backend::SSHBackend;
 use crate::stonk::{Market, StonkMarket};
 use crate::tui::Tui;
-use crate::ui::{Ui, UiDisplay, UiOptions};
+use crate::ui::UiOptions;
 use crate::utils::AppResult;
 use async_trait::async_trait;
 use crossterm::event::{KeyCode, KeyModifiers};
@@ -102,34 +102,6 @@ impl Client {
     pub fn handle_key_events(&mut self, key_code: KeyCode) -> AppResult<()> {
         self.last_action = SystemTime::now();
         match key_code {
-            crossterm::event::KeyCode::Char('c') => {
-                self.tui.terminal.clear()?;
-                self.ui_options.reset();
-            }
-            crossterm::event::KeyCode::Down => self.ui_options.min_y_bound_offset -= 10,
-
-            crossterm::event::KeyCode::Up => self.ui_options.min_y_bound_offset += 10,
-
-            crossterm::event::KeyCode::Left => {
-                self.ui_options.bound_spread =
-                    self.ui_options.bound_spread.checked_sub(1).unwrap_or(0)
-            }
-
-            crossterm::event::KeyCode::Right => {
-                self.ui_options.bound_spread = self
-                    .ui_options
-                    .bound_spread
-                    .checked_add(1)
-                    .unwrap_or(u8::MAX)
-            }
-
-            crossterm::event::KeyCode::Enter => {
-                self.ui_options.reset();
-            }
-
-            crossterm::event::KeyCode::Char('p') => self.ui_options.display = UiDisplay::Portfolio,
-            crossterm::event::KeyCode::Char('l') => self.ui_options.display = UiDisplay::Stonks,
-
             crossterm::event::KeyCode::Char('b') => {
                 if let Some(stonk_id) = self.ui_options.focus_on_stonk {
                     self.agent.select_action(AgentAction::Buy {
@@ -149,16 +121,7 @@ impl Client {
             }
 
             _ => {
-                for idx in 1..9 {
-                    if key_code
-                        == crossterm::event::KeyCode::Char(
-                            format!("{idx}").chars().next().unwrap_or_default(),
-                        )
-                    {
-                        self.ui_options.reset();
-                        self.ui_options.focus_on_stonk = Some(idx - 1);
-                    }
-                }
+                self.ui_options.handle_key_events(key_code)?;
             }
         }
         Ok(())
@@ -186,7 +149,6 @@ impl AppServer {
         let clients = self.clients.clone();
         let market = Arc::clone(&self.market);
         tokio::spawn(async move {
-            let mut ui = Ui::new();
             loop {
                 tokio::time::sleep(tokio::time::Duration::from_millis(250)).await;
 
@@ -209,13 +171,7 @@ impl AppServer {
                 for (_, client) in clients.iter_mut() {
                     client
                         .tui
-                        .draw(
-                            &mut ui,
-                            &market,
-                            client.ui_options,
-                            &client.agent,
-                            number_of_players,
-                        )
+                        .draw(&market, client.ui_options, &client.agent, number_of_players)
                         .unwrap_or_else(|e| debug!("Failed to draw: {}", e));
                 }
 
@@ -239,7 +195,7 @@ impl AppServer {
         let key_pair = russh_keys::key::KeyPair::Ed25519(signing_key);
 
         let config = Config {
-            inactivity_timeout: Some(std::time::Duration::from_secs(3600)),
+            inactivity_timeout: Some(std::time::Duration::from_secs(360)),
             auth_rejection_time: std::time::Duration::from_secs(3),
             auth_rejection_time_initial: Some(std::time::Duration::from_secs(0)),
             keys: vec![key_pair],
@@ -300,9 +256,9 @@ impl Handler for AppServer {
         Ok(true)
     }
 
-    async fn auth_none(&mut self, _: &str) -> Result<Auth, Self::Error> {
-        Ok(Auth::Accept)
-    }
+    // async fn auth_none(&mut self, _: &str) -> Result<Auth, Self::Error> {
+    //     Ok(Auth::Accept)
+    // }
 
     async fn auth_password(&mut self, _: &str, _: &str) -> Result<Auth, Self::Error> {
         Ok(Auth::Accept)
@@ -323,6 +279,8 @@ impl Handler for AppServer {
         session: &mut Session,
     ) -> Result<(), Self::Error> {
         let mut clients = self.clients.lock().await;
+        let number_of_players = clients.len();
+
         if let Some(client) = clients.get_mut(&self.id) {
             let event = convert_data_to_crossterm_event(data);
             // println!("{:?}", event);
@@ -341,6 +299,11 @@ impl Handler for AppServer {
                         client
                             .handle_key_events(key_event.code)
                             .map_err(|e| anyhow::anyhow!("Error: {}", e))?;
+                        let market = self.market.lock().await;
+                        client
+                            .tui
+                            .draw(&market, client.ui_options, &client.agent, number_of_players)
+                            .unwrap_or_else(|e| debug!("Failed to draw: {}", e));
                     }
                 },
                 _ => {}
