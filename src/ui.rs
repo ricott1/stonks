@@ -221,6 +221,57 @@ fn render_day(
     Ok(())
 }
 
+fn render_night(frame: &mut Frame, counter: usize, number_of_players: usize) -> AppResult<()> {
+    let area = frame.size();
+    let img_width = STONKS[0].len() as u16;
+    let side_length = if area.width > img_width {
+        (area.width - img_width) / 2
+    } else {
+        0
+    };
+    let split = Layout::horizontal([
+        Constraint::Length(side_length),
+        Constraint::Length(img_width),
+        Constraint::Length(side_length),
+    ])
+    .split(area);
+
+    let v_split = Layout::vertical([
+        Constraint::Max(img_width / 2),
+        Constraint::Length(2),
+        Constraint::Length(7),
+        Constraint::Length(2),
+    ])
+    .split(split[1]);
+
+    let stonks = img_to_lines("stonk.png").expect("Cannot load stonk image");
+    frame.render_widget(Paragraph::new(stonks), v_split[0]);
+    frame.render_widget(
+        Paragraph::new(format!(
+            "{} player{} online!\nGet ready to",
+            number_of_players,
+            if number_of_players > 1 { "s" } else { "" }
+        ))
+        .centered(),
+        v_split[1],
+    );
+    frame.render_widget(
+        Paragraph::new(
+            STONKS
+                .iter()
+                .map(|&s| Line::from(s).style(Style::default().green()))
+                .collect::<Vec<Line>>(),
+        )
+        .centered(),
+        v_split[2],
+    );
+    frame.render_widget(
+        Paragraph::new(format!("in {}", counter)).centered(),
+        v_split[3],
+    );
+    Ok(())
+}
+
 fn render_stonk(
     frame: &mut Frame,
     market: &Market,
@@ -400,55 +451,7 @@ pub fn render(
         UiDisplay::Portfolio => {}
         UiDisplay::Stonks => match market.phase {
             GamePhase::Day { .. } => render_day(frame, market, ui_options, agent)?,
-            GamePhase::Night { counter } => {
-                let area = frame.size();
-                let img_width = 2 * STONKS.len() as u16;
-                let side_length = if area.width > img_width {
-                    (area.width - img_width) / 2
-                } else {
-                    0
-                };
-                let split = Layout::horizontal([
-                    Constraint::Length(side_length),
-                    Constraint::Length(img_width),
-                    Constraint::Length(side_length),
-                ])
-                .split(area);
-
-                let v_split = Layout::vertical([
-                    Constraint::Max(img_width / 2),
-                    Constraint::Length(2),
-                    Constraint::Length(7),
-                    Constraint::Length(2),
-                ])
-                .split(split[1]);
-
-                let stonks = img_to_lines("stonk.png").expect("Cannot load stonk image");
-                frame.render_widget(Paragraph::new(stonks), v_split[0]);
-                frame.render_widget(
-                    Paragraph::new(format!(
-                        "{} player{} online!\nGet ready to",
-                        number_of_players,
-                        if number_of_players > 1 { "s" } else { "" }
-                    ))
-                    .centered(),
-                    v_split[1],
-                );
-                frame.render_widget(
-                    Paragraph::new(
-                        STONKS
-                            .iter()
-                            .map(|&s| Line::from(s).style(Style::default().green()))
-                            .collect::<Vec<Line>>(),
-                    )
-                    .centered(),
-                    v_split[2],
-                );
-                frame.render_widget(
-                    Paragraph::new(format!("in {}", counter)).centered(),
-                    v_split[3],
-                );
-            }
+            GamePhase::Night { counter } => render_night(frame, counter, number_of_players)?,
         },
     }
 

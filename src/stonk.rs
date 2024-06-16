@@ -12,7 +12,10 @@ pub enum GamePhase {
 }
 
 const PHASE_LENGTH: usize = 240;
-const HISTORICAL_SIZE: usize = 2500;
+const HISTORICAL_SIZE: usize = PHASE_LENGTH * 4;
+
+const MIN_DRIFT: f64 = -0.01;
+const MAX_DRIFT: f64 = 0.01;
 
 pub trait StonkMarket {
     fn tick(&mut self);
@@ -23,7 +26,7 @@ pub trait StonkMarket {
 pub struct Market {
     pub stonks: [Stonk; 8],
     pub last_tick: usize,
-    pub global_trend: f64,
+    pub global_drift: f64,
     pub phase: GamePhase,
 }
 
@@ -37,7 +40,8 @@ impl Market {
                 9800,
                 2500,
                 0.005,
-                0.015,
+                0.0025,
+                0.002,
             ),
             Market::new_stonk(
                 1,
@@ -46,7 +50,8 @@ impl Market {
                 10000,
                 250,
                 0.0,
-                0.01,
+                0.00025,
+                0.001,
             ),
             Market::new_stonk(
                 2,
@@ -55,7 +60,8 @@ impl Market {
                 8000,
                 250,
                 0.005,
-                0.005,
+                0.0005,
+                0.00075,
             ),
             Market::new_stonk(
                 3,
@@ -64,7 +70,8 @@ impl Market {
                 9000,
                 10000,
                 0.000,
-                0.0075,
+                0.00025,
+                0.00075,
             ),
             Market::new_stonk(
                 4,
@@ -73,6 +80,7 @@ impl Market {
                 80000,
                 1000,
                 0.000,
+                0.00025,
                 0.001,
             ),
             Market::new_stonk(
@@ -82,6 +90,7 @@ impl Market {
                 12000,
                 10000,
                 0.000,
+                0.00025,
                 0.001,
             ),
             Market::new_stonk(
@@ -91,6 +100,7 @@ impl Market {
                 120000,
                 7000,
                 0.000,
+                0.0025,
                 0.001,
             ),
             Market::new_stonk(
@@ -100,18 +110,25 @@ impl Market {
                 12000,
                 10000,
                 0.000,
+                0.0025,
                 0.001,
             ),
         ];
 
-        Market {
+        let mut m = Market {
             stonks,
             last_tick: HISTORICAL_SIZE,
-            global_trend: 0.0,
+            global_drift: 0.0,
             phase: GamePhase::Day {
                 counter: PHASE_LENGTH,
             },
+        };
+
+        for _ in 0..HISTORICAL_SIZE {
+            m.tick();
         }
+
+        m
     }
 
     pub fn new_stonk(
@@ -121,9 +138,10 @@ impl Market {
         price_per_share_in_cents: u64,
         number_of_shares: u32,
         drift: f64,
+        drift_volatility: f64,
         volatility: f64,
     ) -> Stonk {
-        let mut s = Stonk {
+        Stonk {
             id,
             class,
             name,
@@ -131,15 +149,10 @@ impl Market {
             number_of_shares,
             allocated_shares: 0,
             drift,
-            drift_volatility: 0.00025,
+            drift_volatility,
             volatility: volatility.max(0.001).min(0.99),
             historical_prices: vec![price_per_share_in_cents],
-        };
-        for _ in 0..HISTORICAL_SIZE {
-            s.tick();
         }
-
-        s
     }
 
     pub fn x_ticks(&self) -> Vec<f64> {
@@ -155,11 +168,10 @@ impl Market {
     pub fn tick_day(&mut self) {
         let rng = &mut rand::thread_rng();
         if self.last_tick % PHASE_LENGTH == 0 {
-            self.global_trend = rng.gen_range(-0.005..0.005);
+            self.global_drift = rng.gen_range(-0.005..0.005);
         }
         for stonk in self.stonks.iter_mut() {
-            stonk.drift += self.global_trend * rng.gen_range(0.25..0.75);
-            stonk.tick();
+            stonk.tick(self.global_drift);
             while stonk.historical_prices.len() > HISTORICAL_SIZE {
                 stonk.historical_prices.remove(0);
             }
@@ -255,9 +267,9 @@ pub struct Stonk {
     pub price_per_share_in_cents: u64, //price is to be intended in cents, and displayed accordingly
     pub number_of_shares: u32,
     pub allocated_shares: u32,
-    pub drift: f64,
-    pub drift_volatility: f64,
-    pub volatility: f64,
+    pub drift: f64, // Cauchy dist mean, changes the mean price percentage variation
+    pub drift_volatility: f64, // Influences the rate of change of drift
+    pub volatility: f64, // Cauchy dist variance, changes the variance of the price percentage variation
     pub historical_prices: Vec<u64>,
 }
 
@@ -284,10 +296,12 @@ impl Stonk {
         self.price_per_share_in_cents as u32 * self.number_of_shares as u32
     }
 
-    pub fn tick(&mut self) {
+    pub fn tick(&mut self, global_drift: f64) {
         let rng = &mut rand::thread_rng();
 
-        let cau = Cauchy::new(self.drift, self.volatility).unwrap();
+        println!("Median:{} Scale:{}", self.drift, self.volatility);
+        let cau =
+            Cauchy::new(self.drift, self.volatility).expect("Failed to sample tick distribution");
 
         // self.price_per_share_in_cents = if rng.gen_bool((1.0 + self.drift) / 2.0) {
         //     self.buy_price().max(2)
@@ -295,26 +309,38 @@ impl Stonk {
         //     self.sell_price().max(1)
         // };
 
-        self.price_per_share_in_cents = cau.sample(rng) as u64;
+        let price_drift = cau.sample(rng);
+        println!("price_drift: {}", price_drift);
 
-        //calculate price drift. A negative value indicates that the stonk is losing value, positive viceversa.
-        let price_drift = self.price_per_share_in_cents as f64
-            - self
-                .historical_prices
-                .iter()
-                .last()
-                .copied()
-                .unwrap_or_default() as f64;
+        self.price_per_share_in_cents =
+            (self.price_per_share_in_cents as f64 * (1.0 + price_drift)) as u64;
+        println!("new price: {}\n", self.price_per_share_in_cents);
 
-        self.drift += price_drift / 100.0 * rng.gen_range(0.25..0.75);
+        if price_drift > 0.0 {
+            if self.drift > 0.0 {
+                self.drift += self.drift_volatility;
+            } else {
+                self.drift += 2.0 * self.drift_volatility;
+            }
+        } else if price_drift < 0.0 {
+            if self.drift > 0.0 {
+                self.drift -= 2.0 * self.drift_volatility;
+            } else {
+                self.drift -= self.drift_volatility;
+            }
+        }
+        self.drift += global_drift * self.drift_volatility;
+
+        self.drift = self.drift.min(MAX_DRIFT).max(MIN_DRIFT);
+
         self.historical_prices.push(self.price_per_share_in_cents);
     }
 
     fn modified_price(&self) -> f64 {
-        let modifier = (self.number_of_shares as f64
-            / (self.number_of_shares - self.allocated_shares) as f64)
-            .powf(0.25);
-        self.price_per_share_in_cents as f64 * modifier
+        // let modifier = (self.number_of_shares as f64
+        //     / (self.number_of_shares - self.allocated_shares) as f64)
+        //     .powf(0.25);
+        self.price_per_share_in_cents as f64 //* modifier
     }
 
     fn buy_price(&self) -> u64 {
