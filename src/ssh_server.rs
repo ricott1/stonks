@@ -150,7 +150,7 @@ impl AppServer {
         let market = Arc::clone(&self.market);
         tokio::spawn(async move {
             loop {
-                tokio::time::sleep(tokio::time::Duration::from_millis(250)).await;
+                tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
 
                 let mut clients = clients.lock().await;
                 let number_of_players = clients.len();

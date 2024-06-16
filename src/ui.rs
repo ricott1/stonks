@@ -22,11 +22,12 @@ const STONKS: [&'static str; 6] = [
     "╚══════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝╚═╝",
 ];
 
-const PALETTES: [tailwind::Palette; 4] = [
+const PALETTES: [tailwind::Palette; 5] = [
     tailwind::BLUE,
     tailwind::EMERALD,
     tailwind::INDIGO,
     tailwind::RED,
+    tailwind::LIME,
 ];
 
 struct TableColors {
@@ -48,7 +49,7 @@ impl TableColors {
             row_fg: tailwind::SLATE.c200,
             selected_style_fg: color.c400,
             normal_row_color: tailwind::SLATE.c950,
-            alt_row_color: tailwind::SLATE.c900,
+            alt_row_color: tailwind::SLATE.c800,
         }
     }
 }
@@ -152,7 +153,7 @@ fn build_stonks_table<'a>(market: &Market, colors: TableColors) -> Table<'a> {
         .add_modifier(Modifier::REVERSED)
         .fg(colors.selected_style_fg);
 
-    let header = ["Name", "Last buy", "Last sell"]
+    let header = ["Name", "Buy $", "Sell $"]
         .into_iter()
         .map(Cell::from)
         .collect::<Row>()
@@ -164,14 +165,22 @@ fn build_stonks_table<'a>(market: &Market, colors: TableColors) -> Table<'a> {
             0 => colors.normal_row_color,
             _ => colors.alt_row_color,
         };
-        [
-            stonk.name.clone(),
-            format!("${:.2}", stonk.formatted_buy_price()),
-            format!("${:.2}", stonk.formatted_sell_price()),
-        ]
-        .into_iter()
-        .map(|content| Cell::from(Text::from(format!("\n{content}"))))
-        .collect::<Row>()
+
+        let last_60_prices = stonk.historical_prices.iter().rev().take(60);
+        let last_len = last_60_prices.len() as u64;
+        let last_minute_avg_price = last_60_prices.sum::<u64>() / last_len;
+        let style = if last_minute_avg_price > stonk.price_per_share_in_cents {
+            Style::default().red()
+        } else if last_minute_avg_price < stonk.price_per_share_in_cents {
+            Style::default().green()
+        } else {
+            Style::default()
+        };
+        Row::new(vec![
+            Cell::new(stonk.name.clone()),
+            Cell::new(format!("${:.2}", stonk.formatted_buy_price())).style(style),
+            Cell::new(format!("${:.2}", stonk.formatted_sell_price())).style(style),
+        ])
         .style(Style::new().fg(colors.row_fg).bg(color))
         .height(3)
     });
@@ -303,10 +312,7 @@ fn render_stonk(
     min_y_bound = (min_y_bound as f64 / spread) as u16;
     max_y_bound = (max_y_bound as f64 * spread) as u16;
 
-    println!("min bound {}, max bound {}", min_y_bound, max_y_bound);
-
     let mut labels: Vec<Span<'static>> = vec![];
-
     let stonk_price = (stonk.price_per_share_in_cents as f64 / 100.0) as u16;
 
     for r in 0..=4 {

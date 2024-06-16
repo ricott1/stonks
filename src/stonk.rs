@@ -2,17 +2,17 @@ use crate::{
     agent::{AgentAction, DecisionAgent},
     utils::AppResult,
 };
-use crossterm::event::KeyCode;
 use rand::Rng;
+use rand_distr::{Cauchy, Distribution};
 
 #[derive(Debug, Clone, Copy)]
 pub enum GamePhase {
-    Day { counter: u64 },
-    Night { counter: u64 },
+    Day { counter: usize },
+    Night { counter: usize },
 }
 
-const PHASE_LENGTH: u64 = 240;
-const HISTORICAL_SIZE: usize = 500;
+const PHASE_LENGTH: usize = 240;
+const HISTORICAL_SIZE: usize = 2500;
 
 pub trait StonkMarket {
     fn tick(&mut self);
@@ -22,7 +22,7 @@ pub trait StonkMarket {
 #[derive(Debug, Clone)]
 pub struct Market {
     pub stonks: [Stonk; 8],
-    pub last_tick: u64,
+    pub last_tick: usize,
     pub global_trend: f64,
     pub phase: GamePhase,
 }
@@ -106,22 +106,11 @@ impl Market {
 
         Market {
             stonks,
-            last_tick: 1,
+            last_tick: HISTORICAL_SIZE,
             global_trend: 0.0,
             phase: GamePhase::Day {
                 counter: PHASE_LENGTH,
             },
-        }
-    }
-
-    pub fn handle_key_events(&mut self, key_code: KeyCode) {
-        match self.phase {
-            GamePhase::Day { .. } => match key_code {
-                KeyCode::Up => self.global_trend += 0.01,
-                KeyCode::Down => self.global_trend -= 0.01,
-                _ => {}
-            },
-            GamePhase::Night { .. } => {}
         }
     }
 
@@ -154,8 +143,8 @@ impl Market {
     }
 
     pub fn x_ticks(&self) -> Vec<f64> {
-        let min_tick = if self.last_tick > HISTORICAL_SIZE as u64 {
-            self.last_tick - HISTORICAL_SIZE as u64
+        let min_tick = if self.last_tick > HISTORICAL_SIZE {
+            self.last_tick - HISTORICAL_SIZE
         } else {
             0
         };
@@ -166,10 +155,10 @@ impl Market {
     pub fn tick_day(&mut self) {
         let rng = &mut rand::thread_rng();
         if self.last_tick % PHASE_LENGTH == 0 {
-            self.global_trend = rng.gen_range(-0.02..0.02);
+            self.global_trend = rng.gen_range(-0.005..0.005);
         }
         for stonk in self.stonks.iter_mut() {
-            stonk.drift += (self.global_trend - stonk.drift) * rng.gen_range(0.25..0.75);
+            stonk.drift += self.global_trend * rng.gen_range(0.25..0.75);
             stonk.tick();
             while stonk.historical_prices.len() > HISTORICAL_SIZE {
                 stonk.historical_prices.remove(0);
@@ -297,11 +286,27 @@ impl Stonk {
 
     pub fn tick(&mut self) {
         let rng = &mut rand::thread_rng();
-        self.price_per_share_in_cents = if rng.gen_bool((1.0 + self.drift) / 2.0) {
-            self.buy_price().max(2)
-        } else {
-            self.sell_price().max(1)
-        };
+
+        let cau = Cauchy::new(self.drift, self.volatility).unwrap();
+
+        // self.price_per_share_in_cents = if rng.gen_bool((1.0 + self.drift) / 2.0) {
+        //     self.buy_price().max(2)
+        // } else {
+        //     self.sell_price().max(1)
+        // };
+
+        self.price_per_share_in_cents = cau.sample(rng) as u64;
+
+        //calculate price drift. A negative value indicates that the stonk is losing value, positive viceversa.
+        let price_drift = self.price_per_share_in_cents
+            - self
+                .historical_prices
+                .iter()
+                .last()
+                .copied()
+                .unwrap_or_default();
+
+        self.drift += price_drift as f64 / 100.0 * rng.gen_range(0.25..0.75);
         self.historical_prices.push(self.price_per_share_in_cents);
     }
 
