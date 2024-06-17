@@ -166,27 +166,21 @@ impl AppServer {
         println!("Starting SSH server. Press Ctrl-C to exit.");
         let clients = self.clients.clone();
         let market = Arc::clone(&self.market);
+
         tokio::spawn(async move {
+            let mut last_market_tick = SystemTime::now();
             loop {
-                tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+                tokio::time::sleep(tokio::time::Duration::from_millis(20)).await;
 
                 let mut clients = clients.lock().await;
                 let number_of_players = clients.len();
 
-                // if number_of_players > 0 {
-                //     println!("{} clients", number_of_players);
-                // }
                 let mut market = market.lock().await;
-
-                market.tick();
 
                 for (id, client) in clients.iter_mut() {
                     market
                         .apply_agent_action::<UserAgent>(&mut client.agent)
                         .unwrap_or_else(|e| println!("Could not apply agent {} action: {}", id, e));
-                }
-
-                for (_, client) in clients.iter_mut() {
                     client
                         .tui
                         .draw(&market, client.ui_options, &client.agent, number_of_players)
@@ -196,7 +190,21 @@ impl AppServer {
                 clients.retain(|_, c| {
                     c.last_action.elapsed().expect("Time flows")
                         <= Duration::from_secs(MAX_TIMEOUT_SECONDS)
-                })
+                });
+
+                if last_market_tick.elapsed().expect("Time flows backwards")
+                    > Duration::from_millis(1000)
+                {
+                    market.tick();
+
+                    for (_, client) in clients.iter_mut() {
+                        client
+                            .tui
+                            .draw(&market, client.ui_options, &client.agent, number_of_players)
+                            .unwrap_or_else(|e| debug!("Failed to draw: {}", e));
+                    }
+                    last_market_tick = SystemTime::now();
+                }
             }
         });
 
