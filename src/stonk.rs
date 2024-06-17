@@ -3,7 +3,7 @@ use crate::{
     utils::AppResult,
 };
 use rand::Rng;
-use rand_distr::{Cauchy, Distribution};
+use rand_distr::{Cauchy, Distribution, Normal};
 
 #[derive(Debug, Clone, Copy)]
 pub enum GamePhase {
@@ -11,7 +11,7 @@ pub enum GamePhase {
     Night { counter: usize },
 }
 
-const PHASE_LENGTH: usize = 240;
+pub const PHASE_LENGTH: usize = 240;
 const HISTORICAL_SIZE: usize = PHASE_LENGTH * 4;
 
 const MIN_DRIFT: f64 = -0.01;
@@ -42,6 +42,7 @@ impl Market {
                 0.005,
                 0.0025,
                 0.002,
+                0.1,
             ),
             Market::new_stonk(
                 1,
@@ -52,6 +53,7 @@ impl Market {
                 0.0,
                 0.00025,
                 0.001,
+                0.1,
             ),
             Market::new_stonk(
                 2,
@@ -62,6 +64,7 @@ impl Market {
                 0.005,
                 0.0005,
                 0.00075,
+                0.1,
             ),
             Market::new_stonk(
                 3,
@@ -72,6 +75,7 @@ impl Market {
                 0.000,
                 0.00025,
                 0.00075,
+                0.1,
             ),
             Market::new_stonk(
                 4,
@@ -82,6 +86,7 @@ impl Market {
                 0.000,
                 0.00025,
                 0.001,
+                0.2,
             ),
             Market::new_stonk(
                 5,
@@ -92,6 +97,7 @@ impl Market {
                 0.000,
                 0.00025,
                 0.001,
+                0.01,
             ),
             Market::new_stonk(
                 6,
@@ -102,6 +108,7 @@ impl Market {
                 0.000,
                 0.0025,
                 0.001,
+                0.35,
             ),
             Market::new_stonk(
                 7,
@@ -112,12 +119,13 @@ impl Market {
                 0.000,
                 0.0025,
                 0.001,
+                0.25,
             ),
         ];
 
         let mut m = Market {
             stonks,
-            last_tick: HISTORICAL_SIZE,
+            last_tick: 1,
             global_drift: 0.0,
             phase: GamePhase::Day {
                 counter: PHASE_LENGTH,
@@ -135,11 +143,12 @@ impl Market {
         id: usize,
         class: StonkClass,
         name: String,
-        price_per_share_in_cents: u64,
+        price_per_share_in_cents: u32,
         number_of_shares: u32,
         drift: f64,
         drift_volatility: f64,
         volatility: f64,
+        shock_probability: f64,
     ) -> Stonk {
         Stonk {
             id,
@@ -151,6 +160,7 @@ impl Market {
             drift,
             drift_volatility,
             volatility: volatility.max(0.001).min(0.99),
+            shock_probability,
             historical_prices: vec![price_per_share_in_cents],
         }
     }
@@ -264,13 +274,14 @@ pub struct Stonk {
     pub id: usize,
     pub class: StonkClass,
     pub name: String,
-    pub price_per_share_in_cents: u64, //price is to be intended in cents, and displayed accordingly
+    pub price_per_share_in_cents: u32, //price is to be intended in cents, and displayed accordingly
     pub number_of_shares: u32,
     pub allocated_shares: u32,
     pub drift: f64, // Cauchy dist mean, changes the mean price percentage variation
     pub drift_volatility: f64, // Influences the rate of change of drift
     pub volatility: f64, // Cauchy dist variance, changes the variance of the price percentage variation
-    pub historical_prices: Vec<u64>,
+    pub shock_probability: f64, // probability to select the Cauchy dist rather than the Guassian one
+    pub historical_prices: Vec<u32>,
 }
 
 impl Stonk {
@@ -300,22 +311,28 @@ impl Stonk {
         let rng = &mut rand::thread_rng();
 
         println!("Median:{} Scale:{}", self.drift, self.volatility);
-        let cau =
-            Cauchy::new(self.drift, self.volatility).expect("Failed to sample tick distribution");
 
-        // self.price_per_share_in_cents = if rng.gen_bool((1.0 + self.drift) / 2.0) {
-        //     self.buy_price().max(2)
-        // } else {
-        //     self.sell_price().max(1)
-        // };
-
-        let price_drift = cau.sample(rng);
+        let price_drift = if rng.gen_bool(self.shock_probability) {
+            Cauchy::new(self.drift, self.volatility)
+                .expect("Failed to sample tick distribution")
+                .sample(rng)
+        } else {
+            // self.price_per_share_in_cents = if rng.gen_bool((1.0 + self.drift) / 2.0) {
+            //     self.buy_price().max(2)
+            // } else {
+            //     self.sell_price().max(1)
+            // };
+            Normal::new(self.drift, self.volatility)
+                .expect("Failed to sample tick distribution")
+                .sample(rng)
+        };
         println!("price_drift: {}", price_drift);
 
         self.price_per_share_in_cents =
-            (self.price_per_share_in_cents as f64 * (1.0 + price_drift)) as u64;
+            (self.price_per_share_in_cents as f64 * (1.0 + price_drift)) as u32;
         println!("new price: {}\n", self.price_per_share_in_cents);
 
+        self.drift /= 25.0;
         if price_drift > 0.0 {
             if self.drift > 0.0 {
                 self.drift += self.drift_volatility;

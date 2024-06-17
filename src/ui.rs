@@ -1,5 +1,5 @@
 use crate::agent::{DecisionAgent, UserAgent};
-use crate::stonk::{GamePhase, Market, Stonk};
+use crate::stonk::{GamePhase, Market, Stonk, PHASE_LENGTH};
 use crate::utils::{img_to_lines, AppResult};
 use crossterm::event::KeyCode;
 use ratatui::layout::Constraint;
@@ -59,53 +59,65 @@ pub enum UiDisplay {
     Stonks,
     Portfolio,
 }
+
+#[derive(Debug, Clone, Copy)]
+pub enum ZoomLevel {
+    Short,
+    Medium,
+    Long,
+}
+
+impl ZoomLevel {
+    pub fn next(&self) -> Self {
+        match self {
+            Self::Short => Self::Medium,
+            Self::Medium => Self::Long,
+            Self::Long => Self::Short,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct UiOptions {
-    min_y_bound_offset: i32,
-    bound_spread: u8,
+    min_y_bound_offset: i64,
     pub focus_on_stonk: Option<usize>,
     display: UiDisplay,
     selected_stonk_index: usize,
     palette_index: usize,
+    zoom_level: ZoomLevel,
 }
 
 impl UiOptions {
     pub fn new() -> Self {
         UiOptions {
             min_y_bound_offset: 0,
-            bound_spread: 0,
             focus_on_stonk: None,
             display: UiDisplay::Stonks,
             selected_stonk_index: 0,
             palette_index: 0,
+            zoom_level: ZoomLevel::Short,
         }
     }
 
     pub fn handle_key_events(&mut self, key_code: KeyCode) -> AppResult<()> {
         match key_code {
             crossterm::event::KeyCode::Down => {
-                if let Some(_) = self.focus_on_stonk {
-                    self.min_y_bound_offset -= 10
+                if let Some(index) = self.focus_on_stonk {
+                    self.focus_on_stonk = Some((index + 1) % 8)
                 } else {
                     self.selected_stonk_index = (self.selected_stonk_index + 1) % 8;
                 }
             }
 
             crossterm::event::KeyCode::Up => {
-                if let Some(_) = self.focus_on_stonk {
-                    self.min_y_bound_offset += 10
+                if let Some(index) = self.focus_on_stonk {
+                    self.focus_on_stonk = Some((index + 8 - 1) % 8)
                 } else {
                     self.selected_stonk_index = (self.selected_stonk_index + 8 - 1) % 8;
                 }
             }
 
-            crossterm::event::KeyCode::Left => {
-                self.bound_spread = self.bound_spread.checked_sub(1).unwrap_or(0)
-            }
-
-            crossterm::event::KeyCode::Right => {
-                self.bound_spread = self.bound_spread.checked_add(1).unwrap_or(u8::MAX)
-            }
+            crossterm::event::KeyCode::Char('z') => self.zoom_level = self.zoom_level.next(),
 
             crossterm::event::KeyCode::Enter => {
                 if let Some(_) = self.focus_on_stonk {
@@ -142,7 +154,7 @@ impl UiOptions {
     pub fn reset(&mut self) {
         self.focus_on_stonk = None;
         self.min_y_bound_offset = 0;
-        self.bound_spread = 0;
+        self.zoom_level = ZoomLevel::Short;
         self.selected_stonk_index = 0;
     }
 }
@@ -166,20 +178,30 @@ fn build_stonks_table<'a>(market: &Market, colors: TableColors) -> Table<'a> {
             _ => colors.alt_row_color,
         };
 
-        let last_60_prices = stonk.historical_prices.iter().rev().take(60);
-        let last_len = last_60_prices.len() as u64;
-        let last_minute_avg_price = last_60_prices.sum::<u64>() / last_len;
-        let style = if last_minute_avg_price > stonk.price_per_share_in_cents {
-            Style::default().red()
-        } else if last_minute_avg_price < stonk.price_per_share_in_cents {
-            Style::default().green()
+        let n = stonk.historical_prices.len() % PHASE_LENGTH;
+        let style = if n > 0 {
+            let last_n_prices = stonk.historical_prices.iter().rev().take(n);
+            let last_len = last_n_prices.len() as u32;
+            let last_minute_avg_price = last_n_prices.sum::<u32>() / last_len;
+            if last_minute_avg_price > stonk.price_per_share_in_cents / 4 * 5 {
+                Style::default().red()
+            } else if last_minute_avg_price > stonk.price_per_share_in_cents {
+                Style::default().yellow()
+            } else if last_minute_avg_price < stonk.price_per_share_in_cents * 5 / 4 {
+                Style::default().light_green()
+            } else if last_minute_avg_price < stonk.price_per_share_in_cents {
+                Style::default().green()
+            } else {
+                Style::default()
+            }
         } else {
             Style::default()
         };
+
         Row::new(vec![
-            Cell::new(stonk.name.clone()),
-            Cell::new(format!("${:.2}", stonk.formatted_buy_price())).style(style),
-            Cell::new(format!("${:.2}", stonk.formatted_sell_price())).style(style),
+            Cell::new(format!("\n{}", stonk.name)),
+            Cell::new(format!("\n${:.2}", stonk.formatted_buy_price())).style(style),
+            Cell::new(format!("\n${:.2}", stonk.formatted_sell_price())).style(style),
         ])
         .style(Style::new().fg(colors.row_fg).bg(color))
         .height(3)
@@ -309,6 +331,13 @@ fn render_stonk(
     } else {
         0
     };
+
+    let clustering = match ui_options.zoom_level {
+        ZoomLevel::Short => 1,
+        ZoomLevel::Medium => 2,
+        ZoomLevel::Long => 4,
+    };
+
     x_ticks = x_ticks
         .iter()
         .skip(to_skip)
@@ -329,42 +358,57 @@ fn render_stonk(
 
     let min_price = datas[0]
         .iter()
-        .map(|(_, d)| *d as u64)
+        .map(|(_, d)| *d as u32)
         .min()
         .unwrap_or_default();
     let max_price = datas[0]
         .iter()
-        .map(|(_, d)| *d as u64)
+        .map(|(_, d)| *d as u32)
         .max()
         .unwrap_or_default();
 
     if min_price < 20 {
         min_y_bound = 0;
     } else {
-        min_y_bound = min_price as u16 / 20 * 20 - 20;
+        min_y_bound = min_price / 20 * 20 - 20;
     }
     if max_price < 20 {
         max_y_bound = 40;
     } else {
-        max_y_bound = max_price as u16 / 20 * 20 + 20;
+        max_y_bound = max_price / 20 * 20 + 20;
     }
 
     if ui_options.min_y_bound_offset >= 0 {
-        min_y_bound += ui_options.min_y_bound_offset as u16;
-        max_y_bound += ui_options.min_y_bound_offset as u16;
+        min_y_bound += ui_options.min_y_bound_offset as u32;
+        max_y_bound += ui_options.min_y_bound_offset as u32;
     } else {
-        let offset = ((-ui_options.min_y_bound_offset) as u16).min(min_y_bound);
+        let offset = (-ui_options.min_y_bound_offset as u32).min(min_y_bound);
         min_y_bound -= offset;
         max_y_bound -= offset;
     }
 
-    let spread = (1.1_f64).powf(ui_options.bound_spread as f64);
-
-    min_y_bound = (min_y_bound as f64 / spread) as u16;
-    max_y_bound = (max_y_bound as f64 * spread) as u16;
-
     let mut labels: Vec<Span<'static>> = vec![];
-    let stonk_price = (stonk.price_per_share_in_cents as f64 / 100.0) as u16;
+    let stonk_price = (stonk.price_per_share_in_cents as f64 / 100.0) as u32;
+
+    let n = stonk.historical_prices.len() % PHASE_LENGTH;
+    let price_style = if n > 0 {
+        let last_n_prices = stonk.historical_prices.iter().rev().take(n);
+        let last_len = last_n_prices.len() as u32;
+        let last_minute_avg_price = last_n_prices.sum::<u32>() / last_len;
+        if last_minute_avg_price > stonk.price_per_share_in_cents / 4 * 5 {
+            Style::default().red()
+        } else if last_minute_avg_price > stonk.price_per_share_in_cents {
+            Style::default().yellow()
+        } else if last_minute_avg_price < stonk.price_per_share_in_cents * 5 / 4 {
+            Style::default().light_green()
+        } else if last_minute_avg_price < stonk.price_per_share_in_cents {
+            Style::default().green()
+        } else {
+            Style::default().cyan()
+        }
+    } else {
+        Style::default().cyan()
+    };
 
     for r in 0..=4 {
         labels.push(
@@ -375,7 +419,7 @@ fn render_stonk(
         if (min_y_bound + r * (max_y_bound - min_y_bound) / 4) < stonk_price
             && stonk_price < (min_y_bound + (r + 1) * (max_y_bound - min_y_bound) / 4)
         {
-            labels.push(Span::raw(format!("{:.0}", stonk_price)))
+            labels.push(Span::styled(format!("{:.0}", stonk_price), price_style))
         }
     }
 

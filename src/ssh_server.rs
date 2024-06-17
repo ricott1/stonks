@@ -111,11 +111,29 @@ impl Client {
                 }
             }
 
+            crossterm::event::KeyCode::Char('B') => {
+                if let Some(stonk_id) = self.ui_options.focus_on_stonk {
+                    self.agent.select_action(AgentAction::Buy {
+                        stonk_id,
+                        amount: 10,
+                    })
+                }
+            }
+
             crossterm::event::KeyCode::Char('s') => {
                 if let Some(stonk_id) = self.ui_options.focus_on_stonk {
                     self.agent.select_action(AgentAction::Sell {
                         stonk_id,
                         amount: 1,
+                    })
+                }
+            }
+
+            crossterm::event::KeyCode::Char('S') => {
+                if let Some(stonk_id) = self.ui_options.focus_on_stonk {
+                    self.agent.select_action(AgentAction::Sell {
+                        stonk_id,
+                        amount: 10,
                     })
                 }
             }
