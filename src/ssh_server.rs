@@ -173,9 +173,9 @@ impl AppServer {
                 let mut clients = clients.lock().await;
                 let number_of_players = clients.len();
 
-                if number_of_players > 0 {
-                    println!("{} clients", number_of_players);
-                }
+                // if number_of_players > 0 {
+                //     println!("{} clients", number_of_players);
+                // }
                 let mut market = market.lock().await;
 
                 market.tick();
@@ -186,7 +186,6 @@ impl AppServer {
                         .unwrap_or_else(|e| println!("Could not apply agent {} action: {}", id, e));
                 }
 
-                println!("Drawing for {} clients", clients.len());
                 for (_, client) in clients.iter_mut() {
                     client
                         .tui
@@ -319,7 +318,6 @@ impl Handler for AppServer {
                             .handle_key_events(key_event.code)
                             .map_err(|e| anyhow::anyhow!("Error: {}", e))?;
                         let market = self.market.lock().await;
-                        println!("Drawing after data");
                         client
                             .tui
                             .draw(&market, client.ui_options, &client.agent, number_of_players)

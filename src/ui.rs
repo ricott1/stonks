@@ -1,3 +1,5 @@
+use std::fmt::{self};
+
 use crate::agent::{DecisionAgent, UserAgent};
 use crate::stonk::{GamePhase, Market, Stonk, PHASE_LENGTH};
 use crate::utils::{img_to_lines, AppResult};
@@ -67,6 +69,16 @@ pub enum ZoomLevel {
     Long,
 }
 
+impl fmt::Display for ZoomLevel {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ZoomLevel::Short => write!(f, "Short"),
+            ZoomLevel::Medium => write!(f, "Medium"),
+            ZoomLevel::Long => write!(f, "Long"),
+        }
+    }
+}
+
 impl ZoomLevel {
     pub fn next(&self) -> Self {
         match self {
@@ -79,7 +91,6 @@ impl ZoomLevel {
 
 #[derive(Debug, Clone, Copy)]
 pub struct UiOptions {
-    min_y_bound_offset: i64,
     pub focus_on_stonk: Option<usize>,
     display: UiDisplay,
     selected_stonk_index: usize,
@@ -90,7 +101,6 @@ pub struct UiOptions {
 impl UiOptions {
     pub fn new() -> Self {
         UiOptions {
-            min_y_bound_offset: 0,
             focus_on_stonk: None,
             display: UiDisplay::Stonks,
             selected_stonk_index: 0,
@@ -153,7 +163,6 @@ impl UiOptions {
 
     pub fn reset(&mut self) {
         self.focus_on_stonk = None;
-        self.min_y_bound_offset = 0;
         self.zoom_level = ZoomLevel::Short;
         self.selected_stonk_index = 0;
     }
@@ -165,7 +174,7 @@ fn build_stonks_table<'a>(market: &Market, colors: TableColors) -> Table<'a> {
         .add_modifier(Modifier::REVERSED)
         .fg(colors.selected_style_fg);
 
-    let header = ["Name", "Buy $", "Sell $"]
+    let header = ["Stonk", "Buy $", "Sell $"]
         .into_iter()
         .map(Cell::from)
         .collect::<Row>()
@@ -322,48 +331,64 @@ fn render_stonk(
         Style::default().light_magenta(),
     ];
 
-    let mut x_ticks = market.x_ticks();
-
-    let data_size = area.width as usize - 5;
-    // We want to take only the last 'data_size' data
-    let to_skip = if x_ticks.len() > data_size {
-        x_ticks.len() - data_size
-    } else {
-        0
-    };
-
     let clustering = match ui_options.zoom_level {
         ZoomLevel::Short => 1,
-        ZoomLevel::Medium => 2,
-        ZoomLevel::Long => 4,
+        ZoomLevel::Medium => 4,
+        ZoomLevel::Long => 16,
     };
 
-    x_ticks = x_ticks
-        .iter()
-        .skip(to_skip)
-        .map(|t| *t)
-        .collect::<Vec<f64>>();
+    // let x_ticks = (min_tick..market.last_tick).map(|t| t as f64).collect();
 
-    let datas = vec![stonk.data(x_ticks.clone())];
+    let graph_width = area.width as usize - 5;
+    let x_data: Vec<f64> = (0..market.last_tick)
+        .rev()
+        .take((clustering * graph_width).min(stonk.historical_prices.len()))
+        .rev()
+        .map(|t| t as f64)
+        .collect();
+
+    let y_data: Vec<f64> = stonk
+        .historical_prices
+        .iter()
+        .rev()
+        .take((clustering * graph_width).min(stonk.historical_prices.len()))
+        .rev()
+        .map(|v| *v as f64 / 100.0)
+        .collect();
+
+    assert!(x_data.len() == y_data.len());
+
+    let datas: Vec<(f64, f64)> = x_data
+        .iter()
+        .enumerate()
+        .step_by(clustering)
+        .map(|(idx, _)| {
+            let max_idx = (idx + clustering).min(x_data.len());
+            (
+                x_data[idx],
+                y_data[idx..max_idx].iter().sum::<f64>() / (max_idx - idx) as f64,
+            )
+        })
+        .collect();
 
     let datasets = vec![Dataset::default()
         .graph_type(GraphType::Line)
         .name(format!("{}: {}", stonk.id + 1, stonk.name.clone()))
         .marker(symbols::Marker::HalfBlock)
         .style(styles[stonk.id])
-        .data(&datas[0])];
+        .data(&datas)];
 
-    let mut min_y_bound;
-    let mut max_y_bound;
+    let min_y_bound;
+    let max_y_bound;
 
-    let min_price = datas[0]
+    let min_price = datas
         .iter()
-        .map(|(_, d)| *d as u32)
+        .map(|(_, d)| *d as usize)
         .min()
         .unwrap_or_default();
-    let max_price = datas[0]
+    let max_price = datas
         .iter()
-        .map(|(_, d)| *d as u32)
+        .map(|(_, d)| *d as usize)
         .max()
         .unwrap_or_default();
 
@@ -378,71 +403,51 @@ fn render_stonk(
         max_y_bound = max_price / 20 * 20 + 20;
     }
 
-    if ui_options.min_y_bound_offset >= 0 {
-        min_y_bound += ui_options.min_y_bound_offset as u32;
-        max_y_bound += ui_options.min_y_bound_offset as u32;
-    } else {
-        let offset = (-ui_options.min_y_bound_offset as u32).min(min_y_bound);
-        min_y_bound -= offset;
-        max_y_bound -= offset;
-    }
+    let n_y_labels = split[0].height as usize / 6;
+    let y_labels: Vec<Span<'static>> = (0..n_y_labels)
+        .map(|r| {
+            format!(
+                "{:>6}",
+                (min_y_bound + r * (max_y_bound - min_y_bound) / n_y_labels)
+            )
+            .bold()
+        })
+        .collect();
 
-    let mut labels: Vec<Span<'static>> = vec![];
-    let stonk_price = (stonk.price_per_share_in_cents as f64 / 100.0) as u32;
-
-    let n = market.last_tick % PHASE_LENGTH;
-    let price_style = if n > 0 {
-        let last_n_prices = stonk.historical_prices.iter().rev().take(n);
-        let last_len = last_n_prices.len() as u32;
-        let last_minute_avg_price = last_n_prices.sum::<u32>() / last_len;
-        if last_minute_avg_price > stonk.price_per_share_in_cents / 4 * 5 {
-            Style::default().red()
-        } else if last_minute_avg_price > stonk.price_per_share_in_cents {
-            Style::default().yellow()
-        } else if last_minute_avg_price < stonk.price_per_share_in_cents * 5 / 4 {
-            Style::default().light_green()
-        } else if last_minute_avg_price < stonk.price_per_share_in_cents {
-            Style::default().green()
-        } else {
-            Style::default().cyan()
-        }
-    } else {
-        Style::default().cyan()
-    };
-
-    for r in 0..=4 {
-        labels.push(
-            (min_y_bound + r * (max_y_bound - min_y_bound) / 4)
-                .to_string()
-                .bold(),
-        );
-        if (min_y_bound + r * (max_y_bound - min_y_bound) / 4) < stonk_price
-            && stonk_price < (min_y_bound + (r + 1) * (max_y_bound - min_y_bound) / 4)
-        {
-            labels.push(Span::styled(format!("{:.0}", stonk_price), price_style))
-        }
-    }
+    let min_x_bound = x_data[0] as usize;
+    let max_x_bound = x_data[x_data.len() - 1] as usize;
+    let x_labels = [min_x_bound, max_x_bound]
+        .iter()
+        .map(|v| v.to_string().bold())
+        .collect();
 
     let chart = Chart::new(datasets)
         .block(Block::bordered().title(format!(" Stonk Market: {:?} ", market.phase).cyan().bold()))
         .x_axis(
             Axis::default()
-                .title("Tick")
+                .title(format!("Tick (x{})", clustering))
+                .labels_alignment(ratatui::layout::Alignment::Center)
                 .style(Style::default().gray())
-                .bounds([x_ticks[0], x_ticks[x_ticks.len() - 1]]),
+                .labels(x_labels)
+                .bounds([min_x_bound as f64, max_x_bound as f64]),
         )
         .y_axis(
             Axis::default()
-                .title(format!("Price"))
+                .title(format!(
+                    "Price ${}",
+                    (stonk.price_per_share_in_cents as f64 / 100.0) as u32
+                ))
                 .style(Style::default().gray())
-                .labels(labels)
+                .labels(y_labels)
                 .bounds([min_y_bound as f64, max_y_bound as f64]),
         );
 
     frame.render_widget(chart, split[0]);
 
     frame.render_widget(
-        Paragraph::new(format!("'#':select stonk number '#', enter:reset",)),
+        Paragraph::new(format!(
+            "'#':select stonk number '#', enter:reset, z:zoom level",
+        )),
         split[1],
     );
 

@@ -12,7 +12,7 @@ pub enum GamePhase {
 }
 
 pub const PHASE_LENGTH: usize = 240;
-const HISTORICAL_SIZE: usize = PHASE_LENGTH * 4;
+pub const HISTORICAL_SIZE: usize = PHASE_LENGTH * 4;
 
 const MIN_DRIFT: f64 = -0.01;
 const MAX_DRIFT: f64 = 0.01;
@@ -165,16 +165,6 @@ impl Market {
         }
     }
 
-    pub fn x_ticks(&self) -> Vec<f64> {
-        let min_tick = if self.last_tick > HISTORICAL_SIZE {
-            self.last_tick - HISTORICAL_SIZE
-        } else {
-            0
-        };
-
-        (min_tick..self.last_tick).map(|t| t as f64).collect()
-    }
-
     pub fn tick_day(&mut self) {
         let rng = &mut rand::thread_rng();
         if self.last_tick % PHASE_LENGTH == 0 {
@@ -285,32 +275,12 @@ pub struct Stonk {
 }
 
 impl Stonk {
-    pub fn data(&self, x_ticks: Vec<f64>) -> Vec<(f64, f64)> {
-        if self.historical_prices.len() < x_ticks.len() {
-            return vec![];
-        }
-        x_ticks
-            .iter()
-            .enumerate()
-            .map(|(idx, t)| {
-                (
-                    *t,
-                    self.historical_prices[self.historical_prices.len() + idx - x_ticks.len()]
-                        as f64
-                        / 100.0,
-                )
-            })
-            .collect::<Vec<(f64, f64)>>()
-    }
-
     pub fn market_cap(&self) -> u32 {
         self.price_per_share_in_cents as u32 * self.number_of_shares as u32
     }
 
     pub fn tick(&mut self, global_drift: f64) {
         let rng = &mut rand::thread_rng();
-
-        println!("Median:{} Scale:{}", self.drift, self.volatility);
 
         let price_drift = if rng.gen_bool(self.shock_probability) {
             Cauchy::new(self.drift, self.volatility)
@@ -326,11 +296,13 @@ impl Stonk {
                 .expect("Failed to sample tick distribution")
                 .sample(rng)
         };
-        println!("price_drift: {}", price_drift);
 
         self.price_per_share_in_cents =
             (self.price_per_share_in_cents as f64 * (1.0 + price_drift)) as u32;
-        println!("new price: {}\n", self.price_per_share_in_cents);
+        println!(
+            "{}  -- Median:{:.5} Scale:{:.5} price_drift:{:.5} new price: {}\n",
+            self.name, self.drift, self.volatility, price_drift, self.price_per_share_in_cents
+        );
 
         self.drift /= 25.0;
         if price_drift > 0.0 {
