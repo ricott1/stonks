@@ -300,7 +300,7 @@ impl Stonk {
         self.price_per_share_in_cents =
             (self.price_per_share_in_cents as f64 * (1.0 + price_drift)) as u32;
         println!(
-            "{}  -- Median:{:.5} Scale:{:.5} price_drift:{:.5} new price: {}\n",
+            "{:16}: Median={:+.5} Scale={:.5} price_drift={:+.5} new price={}\n",
             self.name, self.drift, self.volatility, price_drift, self.price_per_share_in_cents
         );
 

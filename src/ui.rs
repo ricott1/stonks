@@ -174,7 +174,7 @@ fn build_stonks_table<'a>(market: &Market, colors: TableColors) -> Table<'a> {
         .add_modifier(Modifier::REVERSED)
         .fg(colors.selected_style_fg);
 
-    let header = ["Stonk", "Buy $", "Sell $"]
+    let header = ["Stonk", "Buy $", "Sell $", "Today +/-", "Max +/-"]
         .into_iter()
         .map(Cell::from)
         .collect::<Row>()
@@ -207,10 +207,57 @@ fn build_stonks_table<'a>(market: &Market, colors: TableColors) -> Table<'a> {
             Style::default()
         };
 
+        let today_initial_price = stonk.historical_prices[stonk.historical_prices.len() - n];
+        let today_variation = if today_initial_price > 0 {
+            (stonk.price_per_share_in_cents as f64 - today_initial_price as f64)
+                / today_initial_price as f64
+                * 100.0
+        } else {
+            0.0
+        };
+
+        let today_style = if today_variation > 5.0 {
+            Style::default().green()
+        } else if today_variation > 1.0 {
+            Style::default().green()
+        } else if today_variation > 0.1 {
+            Style::default().light_green()
+        } else if today_variation < -1.0 {
+            Style::default().red()
+        } else if today_variation < -0.1 {
+            Style::default().yellow()
+        } else {
+            Style::default()
+        };
+
+        let max_variation = if stonk.historical_prices[0] > 0 {
+            (stonk.price_per_share_in_cents as f64 - stonk.historical_prices[0] as f64)
+                / stonk.historical_prices[0] as f64
+                * 100.0
+        } else {
+            0.0
+        };
+
+        let max_style = if max_variation > 5.0 {
+            Style::default().green()
+        } else if max_variation > 5.0 {
+            Style::default().green()
+        } else if max_variation > 0.5 {
+            Style::default().light_green()
+        } else if max_variation < -5.0 {
+            Style::default().red()
+        } else if max_variation < -0.5 {
+            Style::default().yellow()
+        } else {
+            Style::default()
+        };
+
         Row::new(vec![
             Cell::new(format!("\n{}", stonk.name)),
             Cell::new(format!("\n${:.2}", stonk.formatted_buy_price())).style(style),
             Cell::new(format!("\n${:.2}", stonk.formatted_sell_price())).style(style),
+            Cell::new(format!("\n{:+.2}%", today_variation)).style(today_style),
+            Cell::new(format!("\n{:+.2}%", max_variation)).style(max_style),
         ])
         .style(Style::new().fg(colors.row_fg).bg(color))
         .height(3)
@@ -222,11 +269,13 @@ fn build_stonks_table<'a>(market: &Market, colors: TableColors) -> Table<'a> {
             Constraint::Length(24),
             Constraint::Length(10),
             Constraint::Length(10),
+            Constraint::Length(10),
+            Constraint::Length(10),
         ],
     )
     .header(header)
     .highlight_style(selected_style)
-    .highlight_symbol(Text::from(vec!["".into(), bar.into(), "".into()]))
+    .highlight_symbol(Text::from(vec![bar.into(), bar.into(), bar.into()]))
     .bg(colors.buffer_bg)
     .highlight_spacing(HighlightSpacing::Always)
 }
