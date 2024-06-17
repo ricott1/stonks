@@ -178,7 +178,7 @@ fn build_stonks_table<'a>(market: &Market, colors: TableColors) -> Table<'a> {
             _ => colors.alt_row_color,
         };
 
-        let n = stonk.historical_prices.len() % PHASE_LENGTH;
+        let n = market.last_tick % PHASE_LENGTH;
         let style = if n > 0 {
             let last_n_prices = stonk.historical_prices.iter().rev().take(n);
             let last_len = last_n_prices.len() as u32;
@@ -390,7 +390,7 @@ fn render_stonk(
     let mut labels: Vec<Span<'static>> = vec![];
     let stonk_price = (stonk.price_per_share_in_cents as f64 / 100.0) as u32;
 
-    let n = stonk.historical_prices.len() % PHASE_LENGTH;
+    let n = market.last_tick % PHASE_LENGTH;
     let price_style = if n > 0 {
         let last_n_prices = stonk.historical_prices.iter().rev().take(n);
         let last_len = last_n_prices.len() as u32;
@@ -490,7 +490,6 @@ pub fn render(
     number_of_players: usize,
 ) -> AppResult<()> {
     clear(frame);
-
     match ui_options.display {
         UiDisplay::Portfolio => {}
         UiDisplay::Stonks => match market.phase {
