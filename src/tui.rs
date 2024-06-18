@@ -40,7 +40,7 @@ impl Tui {
     pub fn draw(
         &mut self,
         market: &Market,
-        ui_options: UiOptions,
+        ui_options: &UiOptions,
         agent: &UserAgent,
         number_of_players: usize,
     ) -> AppResult<()> {

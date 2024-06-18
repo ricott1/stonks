@@ -5,7 +5,9 @@ use crate::tui::Tui;
 use crate::ui::UiOptions;
 use crate::utils::AppResult;
 use async_trait::async_trait;
-use crossterm::event::{KeyCode, KeyModifiers};
+use crossterm::event::*;
+use rand::Rng;
+use rand_distr::Alphanumeric;
 use russh::{server::*, Channel, ChannelId, CryptoVec, Disconnect, Pty};
 use russh_keys::key::PublicKey;
 use std::collections::HashMap;
@@ -15,10 +17,11 @@ use std::io::{Read, Write};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tokio::sync::Mutex;
-use tracing::debug;
+use tracing::{debug, error, info};
 
 const SERVER_SSH_PORT: u16 = 3333;
-const MAX_TIMEOUT_SECONDS: u64 = 1200;
+const CLIENTS_DROPOUT_TIME_SECONDS: u64 = 60 * 10;
+const PERSISTED_CLIENTS_DROPOUT_TIME_SECONDS: u64 = 60 * 60 * 24;
 const MARKET_TICK_INTERVAL_MILLIS: u64 = 1000;
 const RENDER_INTERVAL_MILLIS: u64 = 50;
 
@@ -101,46 +104,36 @@ struct Client {
 }
 
 impl Client {
-    pub fn handle_key_events(&mut self, key_code: KeyCode) -> AppResult<()> {
+    pub fn handle_key_events(&mut self, key_event: KeyEvent, _market: &Market) -> AppResult<()> {
         self.last_action = SystemTime::now();
-        match key_code {
-            crossterm::event::KeyCode::Char('b') => {
+        match key_event.code {
+            KeyCode::Char('b') => {
                 if let Some(stonk_id) = self.ui_options.focus_on_stonk {
-                    self.agent.select_action(AgentAction::Buy {
-                        stonk_id,
-                        amount: 1,
-                    })
+                    let amount = if key_event.modifiers == KeyModifiers::SHIFT {
+                        10
+                    } else {
+                        1
+                    };
+
+                    println!("Buying {}", amount);
+                    self.agent
+                        .select_action(AgentAction::Buy { stonk_id, amount })
                 }
             }
 
-            crossterm::event::KeyCode::Char('B') => {
+            KeyCode::Char('s') => {
                 if let Some(stonk_id) = self.ui_options.focus_on_stonk {
-                    self.agent.select_action(AgentAction::Buy {
-                        stonk_id,
-                        amount: 10,
-                    })
+                    let amount = if key_event.modifiers == KeyModifiers::SHIFT {
+                        10
+                    } else {
+                        1
+                    };
+                    self.agent
+                        .select_action(AgentAction::Sell { stonk_id, amount })
                 }
             }
 
-            crossterm::event::KeyCode::Char('s') => {
-                if let Some(stonk_id) = self.ui_options.focus_on_stonk {
-                    self.agent.select_action(AgentAction::Sell {
-                        stonk_id,
-                        amount: 1,
-                    })
-                }
-            }
-
-            crossterm::event::KeyCode::Char('S') => {
-                if let Some(stonk_id) = self.ui_options.focus_on_stonk {
-                    self.agent.select_action(AgentAction::Sell {
-                        stonk_id,
-                        amount: 10,
-                    })
-                }
-            }
-
-            _ => {
+            key_code => {
                 self.ui_options.handle_key_events(key_code)?;
             }
         }
@@ -152,6 +145,8 @@ impl Client {
 pub struct AppServer {
     market: Arc<Mutex<Market>>,
     clients: Arc<Mutex<HashMap<usize, Client>>>,
+    persisted_agents: Arc<Mutex<HashMap<String, (SystemTime, UserAgent)>>>,
+    user_id: Option<String>,
     id: usize,
 }
 
@@ -160,14 +155,28 @@ impl AppServer {
         Self {
             market: Arc::new(Mutex::new(market)),
             clients: Arc::new(Mutex::new(HashMap::new())),
+            persisted_agents: Arc::new(Mutex::new(HashMap::new())),
+            user_id: None,
             id: 0,
         }
     }
 
+    fn generate_user_id() -> String {
+        let buf_id = rand::thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(8)
+            .collect::<Vec<u8>>()
+            .to_ascii_lowercase();
+        std::str::from_utf8(buf_id.as_slice())
+            .expect("Failed to generate user id string")
+            .to_string()
+    }
+
     pub async fn run(&mut self) -> AppResult<()> {
-        println!("Starting SSH server. Press Ctrl-C to exit.");
+        info!("Starting SSH server. Press Ctrl-C to exit.");
         let clients = self.clients.clone();
-        let market = Arc::clone(&self.market);
+        let persisted_agents = self.persisted_agents.clone();
+        let market = self.market.clone();
 
         tokio::spawn(async move {
             let mut last_market_tick = SystemTime::now();
@@ -176,22 +185,34 @@ impl AppServer {
                     .await;
 
                 let mut clients = clients.lock().await;
+                let mut persisted_agents = persisted_agents.lock().await;
                 let mut market = market.lock().await;
 
                 clients.retain(|_, c| {
                     c.last_action.elapsed().expect("Time flows")
-                        <= Duration::from_secs(MAX_TIMEOUT_SECONDS)
+                        <= Duration::from_secs(CLIENTS_DROPOUT_TIME_SECONDS)
                 });
+
+                persisted_agents.retain(|_, (t, _)| {
+                    t.elapsed().expect("Time flows")
+                        <= Duration::from_secs(PERSISTED_CLIENTS_DROPOUT_TIME_SECONDS)
+                });
+
                 let number_of_players = clients.len();
 
                 for (id, client) in clients.iter_mut() {
-                    market
-                        .apply_agent_action::<UserAgent>(&mut client.agent)
-                        .unwrap_or_else(|e| println!("Could not apply agent {} action: {}", id, e));
-                    // client
-                    //     .tui
-                    //     .draw(&market, client.ui_options, &client.agent, number_of_players)
-                    //     .unwrap_or_else(|e| debug!("Failed to draw: {}", e));
+                    if client.agent.selected_action().is_some() {
+                        market
+                            .apply_agent_action::<UserAgent>(&mut client.agent)
+                            .unwrap_or_else(|e| {
+                                error!("Could not apply agent {} action: {}", id, e)
+                            });
+
+                        persisted_agents.insert(
+                            client.ui_options.user_id.clone(),
+                            (SystemTime::now(), client.agent.clone()),
+                        );
+                    }
                 }
 
                 for (_, client) in clients.iter_mut() {
@@ -205,7 +226,12 @@ impl AppServer {
 
                     client
                         .tui
-                        .draw(&market, client.ui_options, &client.agent, number_of_players)
+                        .draw(
+                            &market,
+                            &client.ui_options,
+                            &client.agent,
+                            number_of_players,
+                        )
                         .unwrap_or_else(|e| debug!("Failed to draw: {}", e));
                 }
 
@@ -279,11 +305,20 @@ impl Handler for AppServer {
                 .clear()
                 .map_err(|e| anyhow::anyhow!("Failed to clear terminal: {}", e))?;
 
+            let persisted_agents = self.persisted_agents.lock().await;
+
+            let user_id = self.user_id.clone().expect("User id should be set");
+            let agent = persisted_agents
+                .get(&user_id)
+                .expect("Agent should be persisted")
+                .clone()
+                .1;
+
             let client = Client {
                 tui,
-                ui_options: UiOptions::new(),
+                ui_options: UiOptions::new(user_id),
                 last_action: SystemTime::now(),
-                agent: UserAgent::new(),
+                agent,
             };
 
             clients.insert(self.id, client);
@@ -296,15 +331,37 @@ impl Handler for AppServer {
     //     Ok(Auth::Accept)
     // }
 
-    async fn auth_password(&mut self, _: &str, _: &str) -> Result<Auth, Self::Error> {
+    async fn auth_password(&mut self, user: &str, _password: &str) -> Result<Auth, Self::Error> {
+        let mut persisted_agents = self.persisted_agents.lock().await;
+
+        if persisted_agents.get(user).is_none() {
+            let agent = UserAgent::new();
+            let new_user = Self::generate_user_id();
+            persisted_agents.insert(new_user.to_string(), (SystemTime::now(), agent));
+            self.user_id = Some(new_user);
+        } else {
+            self.user_id = Some(user.to_string());
+        }
+
         Ok(Auth::Accept)
     }
 
     async fn auth_publickey(
         &mut self,
-        _user: &str,
+        user: &str,
         _public_key: &PublicKey,
     ) -> Result<Auth, Self::Error> {
+        let mut persisted_agents = self.persisted_agents.lock().await;
+
+        if persisted_agents.get(user).is_none() {
+            let agent = UserAgent::new();
+            let new_user = Self::generate_user_id();
+            persisted_agents.insert(new_user.to_string(), (SystemTime::now(), agent));
+            self.user_id = Some(new_user);
+        } else {
+            self.user_id = Some(user.to_string());
+        }
+
         Ok(Auth::Accept)
     }
 
@@ -319,27 +376,32 @@ impl Handler for AppServer {
 
         if let Some(client) = clients.get_mut(&self.id) {
             let event = convert_data_to_crossterm_event(data);
-            // println!("{:?}", event);
+            debug!("{:?}", event);
             match event {
-                Some(crossterm::event::Event::Mouse(..)) => {}
-                Some(crossterm::event::Event::Key(key_event)) => match key_event.code {
-                    crossterm::event::KeyCode::Esc => {
+                Some(Event::Mouse(..)) => {}
+                Some(Event::Key(key_event)) => match key_event.code {
+                    KeyCode::Esc => {
                         client
                             .tui
                             .exit()
                             .await
-                            .unwrap_or_else(|e| println!("Error exiting tui: {}", e));
+                            .unwrap_or_else(|e| error!("Error exiting tui: {}", e));
                         clients.remove(&self.id);
                     }
                     _ => {
-                        client
-                            .handle_key_events(key_event.code)
-                            .map_err(|e| anyhow::anyhow!("Error: {}", e))?;
                         let market = self.market.lock().await;
                         client
+                            .handle_key_events(key_event, &market)
+                            .map_err(|e| anyhow::anyhow!("Error: {}", e))?;
+                        client
                             .tui
-                            .draw(&market, client.ui_options, &client.agent, number_of_players)
-                            .unwrap_or_else(|e| debug!("Failed to draw: {}", e));
+                            .draw(
+                                &market,
+                                &client.ui_options,
+                                &client.agent,
+                                number_of_players,
+                            )
+                            .unwrap_or_else(|e| error!("Failed to draw: {}", e));
                     }
                 },
                 _ => {}
@@ -378,7 +440,7 @@ impl Handler for AppServer {
         _: u32,
         _: &mut Session,
     ) -> Result<(), Self::Error> {
-        println!("Window resize request");
+        debug!("Window resize request");
         let mut clients = self.clients.lock().await;
         if let Some(client) = clients.get_mut(&self.id) {
             client
@@ -390,24 +452,43 @@ impl Handler for AppServer {
     }
 }
 
-fn convert_data_to_key_event(data: &[u8]) -> Option<crossterm::event::KeyEvent> {
-    let key = match data {
-        b"\x1b\x5b\x41" => crossterm::event::KeyCode::Up,
-        b"\x1b\x5b\x42" => crossterm::event::KeyCode::Down,
-        b"\x1b\x5b\x43" => crossterm::event::KeyCode::Right,
-        b"\x1b\x5b\x44" => crossterm::event::KeyCode::Left,
-        b"\x03" | b"\x1b" => crossterm::event::KeyCode::Esc, // Ctrl-C is also sent as Esc
-        b"\x0d" => crossterm::event::KeyCode::Enter,
-        b"\x7f" => crossterm::event::KeyCode::Backspace,
-        b"\x1b[3~" => crossterm::event::KeyCode::Delete,
-        b"\x09" => crossterm::event::KeyCode::Tab,
-        x if x.len() == 1 => crossterm::event::KeyCode::Char(data[0] as char),
-        _ => {
-            return None;
+fn convert_data_to_key_event(data: &[u8]) -> Option<KeyEvent> {
+    debug!("convert_data_to_key_event: data {:?}", data);
+    let (code, modifiers) = if data.len() == 1 {
+        match data[0] {
+            1 => (KeyCode::Home, KeyModifiers::empty()),
+            2 => (KeyCode::Insert, KeyModifiers::empty()),
+            3 => (KeyCode::Delete, KeyModifiers::empty()),
+            4 => (KeyCode::End, KeyModifiers::empty()),
+            5 => (KeyCode::PageUp, KeyModifiers::empty()),
+            6 => (KeyCode::PageDown, KeyModifiers::empty()),
+            13 => (KeyCode::Enter, KeyModifiers::empty()),
+            // x if x >= 1 && x <= 26 => (
+            //     KeyCode::Char(((x + 86) as char).to_ascii_lowercase()),
+            //     KeyModifiers::CONTROL,
+            // ),
+            27 => (KeyCode::Esc, KeyModifiers::empty()),
+            x if x >= 65 && x <= 90 => (
+                KeyCode::Char((x as char).to_ascii_lowercase()),
+                KeyModifiers::SHIFT,
+            ),
+            x if x >= 97 && x <= 122 => (KeyCode::Char(x as char), KeyModifiers::empty()),
+            127 => (KeyCode::Backspace, KeyModifiers::empty()),
+            _ => return None,
         }
+    } else if data.len() == 3 {
+        match data[2] {
+            65 => (KeyCode::Up, KeyModifiers::empty()),
+            66 => (KeyCode::Down, KeyModifiers::empty()),
+            67 => (KeyCode::Right, KeyModifiers::empty()),
+            68 => (KeyCode::Left, KeyModifiers::empty()),
+            _ => return None,
+        }
+    } else {
+        return None;
     };
-    let event = crossterm::event::KeyEvent::new(key, crossterm::event::KeyModifiers::empty());
 
+    let event = KeyEvent::new(code, modifiers);
     Some(event)
 }
 
@@ -453,27 +534,27 @@ fn decode_sgr_mouse_input(ansi_code: Vec<u8>) -> AppResult<(u8, u16, u16)> {
     Ok((cb, cx, cy))
 }
 
-fn convert_data_to_mouse_event(data: &[u8]) -> Option<crossterm::event::MouseEvent> {
+fn convert_data_to_mouse_event(data: &[u8]) -> Option<MouseEvent> {
     let (cb, column, row) = decode_sgr_mouse_input(data.to_vec()).ok()?;
     let kind = match cb {
-        0 => crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
-        1 => crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Middle),
-        2 => crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Right),
-        3 => crossterm::event::MouseEventKind::Up(crossterm::event::MouseButton::Left),
-        32 => crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left),
-        33 => crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Middle),
-        34 => crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Right),
-        35 => crossterm::event::MouseEventKind::Moved,
-        64 => crossterm::event::MouseEventKind::ScrollUp,
-        65 => crossterm::event::MouseEventKind::ScrollDown,
+        0 => MouseEventKind::Down(MouseButton::Left),
+        1 => MouseEventKind::Down(MouseButton::Middle),
+        2 => MouseEventKind::Down(MouseButton::Right),
+        3 => MouseEventKind::Up(MouseButton::Left),
+        32 => MouseEventKind::Drag(MouseButton::Left),
+        33 => MouseEventKind::Drag(MouseButton::Middle),
+        34 => MouseEventKind::Drag(MouseButton::Right),
+        35 => MouseEventKind::Moved,
+        64 => MouseEventKind::ScrollUp,
+        65 => MouseEventKind::ScrollDown,
         96..=255 => {
-            println!("cb {}", cb);
+            debug!("cb {}", cb);
             return None;
         }
         _ => return None,
     };
 
-    let event = crossterm::event::MouseEvent {
+    let event = MouseEvent {
         kind,
         column,
         row,
@@ -483,14 +564,14 @@ fn convert_data_to_mouse_event(data: &[u8]) -> Option<crossterm::event::MouseEve
     Some(event)
 }
 
-fn convert_data_to_crossterm_event(data: &[u8]) -> Option<crossterm::event::Event> {
+fn convert_data_to_crossterm_event(data: &[u8]) -> Option<Event> {
     if data.starts_with(&[27, 91, 60]) {
         if let Some(event) = convert_data_to_mouse_event(data) {
-            return Some(crossterm::event::Event::Mouse(event));
+            return Some(Event::Mouse(event));
         }
     } else {
         if let Some(event) = convert_data_to_key_event(data) {
-            return Some(crossterm::event::Event::Key(event));
+            return Some(Event::Key(event));
         }
     }
 

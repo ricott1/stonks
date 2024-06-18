@@ -109,8 +109,9 @@ impl ZoomLevel {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct UiOptions {
+    pub user_id: String,
     pub focus_on_stonk: Option<usize>,
     display: UiDisplay,
     selected_stonk_index: usize,
@@ -121,8 +122,9 @@ pub struct UiOptions {
 }
 
 impl UiOptions {
-    pub fn new() -> Self {
+    pub fn new(user_id: String) -> Self {
         UiOptions {
+            user_id,
             focus_on_stonk: None,
             display: UiDisplay::Stonks,
             selected_stonk_index: 0,
@@ -305,12 +307,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
             Style::default()
         };
 
-        let agent_share = agent
-            .owned_stonks()
-            .get(&stonk.id)
-            .copied()
-            .unwrap_or_default() as f64
-            / stonk.number_of_shares as f64;
+        let agent_share = agent.owned_stonks()[stonk.id] as f64 / stonk.number_of_shares as f64;
 
         let agent_style = if agent_share >= 5.0 {
             Style::default().magenta()
@@ -324,11 +321,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
             Style::default()
         };
 
-        let agent_stonk_value = (agent
-            .owned_stonks()
-            .get(&stonk.id)
-            .copied()
-            .unwrap_or_default() as f64
+        let agent_stonk_value = (agent.owned_stonks()[stonk.id] as f64
             * (stonk.price_per_share_in_cents as f64 / 100.0))
             as u32;
 
@@ -373,13 +366,13 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
 fn render_day(
     frame: &mut Frame,
     market: &Market,
-    ui_options: UiOptions,
+    ui_options: &UiOptions,
     agent: &UserAgent,
     area: Rect,
 ) -> AppResult<()> {
     if let Some(stonk_id) = ui_options.focus_on_stonk {
         let stonk = &market.stonks[stonk_id];
-        render_stonk(frame, market, ui_options, agent, stonk, area)?;
+        render_stonk(frame, market, ui_options, stonk, area)?;
     } else {
         let colors = TableColors::new(&PALETTES[ui_options.palette_index]);
         let table = build_stonks_table(market, agent, colors);
@@ -395,7 +388,7 @@ fn render_day(
 fn render_night(
     frame: &mut Frame,
     counter: usize,
-    ui_options: UiOptions,
+    ui_options: &UiOptions,
     area: Rect,
 ) -> AppResult<()> {
     let total_width = CARD_WIDTH * 3 + 7;
@@ -485,8 +478,7 @@ fn render_night(
 fn render_stonk(
     frame: &mut Frame,
     market: &Market,
-    ui_options: UiOptions,
-    agent: &UserAgent,
+    ui_options: &UiOptions,
     stonk: &Stonk,
     area: Rect,
 ) -> AppResult<()> {
@@ -624,30 +616,29 @@ fn render_stonk(
 
     frame.render_widget(
         Paragraph::new(format!(
-            "'#':select stonk number '#', enter:reset, z:zoom level",
+            "{:24} {:24} {:24}",
+            "`↑↓`:select stonk", "`enter`:main table", "`z`:zoom level",
         )),
         split[1],
     );
 
     frame.render_widget(
         Paragraph::new(format!(
-            "b: buy for ${:.2}  s: sell for ${:.2}",
-            stonk.formatted_buy_price(),
-            stonk.formatted_sell_price(),
+            "{:24} {:24}",
+            format!("`b`: buy x1   (${:.2})", stonk.formatted_buy_price()),
+            format!("`B`: buy x10  (${:.2})", 10.0 * stonk.formatted_buy_price()),
         )),
         split[2],
     );
-    let amount = agent
-        .owned_stonks()
-        .get(&stonk.id)
-        .copied()
-        .unwrap_or_default();
+
     frame.render_widget(
         Paragraph::new(format!(
-            "Cash: ${:.2} - {} ({:.03}%)",
-            agent.formatted_cash(),
-            amount,
-            (amount as f64 / stonk.number_of_shares as f64)
+            "{:24} {:24}",
+            format!("`s`: sell x1  (${:.2})", stonk.formatted_sell_price()),
+            format!(
+                "`S`: sell x10 (${:.2})",
+                10.0 * stonk.formatted_sell_price()
+            ),
         )),
         split[3],
     );
@@ -668,7 +659,7 @@ fn clear(frame: &mut Frame) {
 pub fn render(
     frame: &mut Frame,
     market: &Market,
-    ui_options: UiOptions,
+    ui_options: &UiOptions,
     agent: &UserAgent,
     number_of_players: usize,
 ) -> AppResult<()> {
@@ -677,13 +668,28 @@ pub fn render(
     let area = frame.size();
     let split = Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).split(area);
 
+    let share_amount_string = if let Some(stonk_id) = ui_options.focus_on_stonk {
+        let amount = agent.owned_stonks()[stonk_id];
+        let stonk = &market.stonks[stonk_id];
+        format!(
+            "{} ({:.03}%) ",
+            amount,
+            (amount as f64 / stonk.number_of_shares as f64)
+        )
+    } else {
+        "".to_string()
+    };
+
     frame.render_widget(
         Paragraph::new(format!(
-            "Day {} {} - {} player{} online",
+            "Day {} {} - Cash: ${:.2} {}- {} player{} online - `ssh {}@frittura.org -p 3333`",
             market.cycles + 1,
             market.phase.formatted_time(),
+            agent.formatted_cash(),
+            share_amount_string,
             number_of_players,
-            if number_of_players > 1 { "s" } else { "" }
+            if number_of_players > 1 { "s" } else { "" },
+            ui_options.user_id
         )),
         split[0],
     );

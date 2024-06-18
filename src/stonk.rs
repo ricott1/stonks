@@ -4,6 +4,7 @@ use crate::{
 };
 use rand::Rng;
 use rand_distr::{Cauchy, Distribution, Normal};
+use tracing::debug;
 
 const DAY_STARTING_HOUR: usize = 6;
 const DAY_LENGTH_HOURS: usize = 16;
@@ -165,7 +166,7 @@ impl Market {
             m.tick();
         }
 
-        println!("Starting market at {:?}", m.phase);
+        debug!("Starting market at {:?}", m.phase);
 
         m
     }
@@ -227,7 +228,7 @@ impl Market {
 
 impl StonkMarket for Market {
     fn tick(&mut self) {
-        println!("\nMarket tick {:?}", self.phase);
+        debug!("\nMarket tick {:?}", self.phase);
         match self.phase {
             GamePhase::Day { counter } => {
                 self.tick_day();
@@ -289,6 +290,8 @@ impl StonkMarket for Market {
                 }
             }
         }
+
+        agent.clear_action();
 
         Ok(())
     }
@@ -382,7 +385,7 @@ impl Stonk {
 
         self.historical_prices.push(self.price_per_share_in_cents);
 
-        println!(
+        debug!(
             "{:15} μ={:+.5} σ={:.5} Δ={:+.5} price={}\n{:?}",
             self.name,
             self.drift,
@@ -432,12 +435,12 @@ impl Stonk {
         self.price_per_share_in_cents as f64 //* modifier
     }
 
-    fn buy_price(&self) -> u64 {
-        (self.modified_price() * (1.0 + self.volatility)) as u64
+    fn buy_price(&self) -> u32 {
+        (self.modified_price() * (1.0 + self.volatility)) as u32
     }
 
-    fn sell_price(&self) -> u64 {
-        (self.modified_price() * (1.0 - self.volatility)) as u64
+    fn sell_price(&self) -> u32 {
+        (self.modified_price() * (1.0 - self.volatility)) as u32
     }
 
     pub fn formatted_buy_price(&self) -> f64 {

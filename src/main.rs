@@ -1,5 +1,5 @@
 use stonks::{ssh_server::AppServer, stonk::Market, utils::AppResult};
-use tracing::metadata::LevelFilter;
+use tracing::{debug, metadata::LevelFilter};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -11,7 +11,7 @@ async fn main() -> AppResult<()> {
         .init();
 
     let market = Market::new();
-    println!("Started Market with {} stonks!", market.stonks.len());
+    debug!("Started Market with {} stonks!", market.stonks.len());
 
     AppServer::new(market).run().await?;
 
