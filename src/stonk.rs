@@ -16,8 +16,8 @@ pub const NIGHT_LENGTH: usize = 4 * NIGHT_LENGTH_HOURS; // NIGHT_LENGTH = 8 hour
 // We keep record of the last 8 weeks
 pub const HISTORICAL_SIZE: usize = DAY_LENGTH * 7 * 8;
 
-const MIN_DRIFT: f64 = -0.01;
-const MAX_DRIFT: f64 = 0.01;
+const MIN_DRIFT: f64 = -0.2;
+const MAX_DRIFT: f64 = -MIN_DRIFT;
 
 #[derive(Debug, Clone, Copy)]
 pub enum GamePhase {
@@ -318,11 +318,11 @@ pub struct Stonk {
     pub price_per_share_in_cents: u32, //price is to be intended in cents, and displayed accordingly
     pub number_of_shares: u32,
     pub allocated_shares: u32,
-    pub drift: f64, // Cauchy dist mean, changes the mean price percentage variation
-    pub drift_volatility: f64, // Influences the rate of change of drift
-    pub volatility: f64, // Cauchy dist variance, changes the variance of the price percentage variation
-    pub shock_probability: f64, // probability to select the Cauchy dist rather than the Guassian one
-    pub starting_price: u32,
+    drift: f64,            // Cauchy dist mean, changes the mean price percentage variation
+    drift_volatility: f64, // Influences the rate of change of drift
+    volatility: f64, // Cauchy dist variance, changes the variance of the price percentage variation
+    shock_probability: f64, // probability to select the Cauchy dist rather than the Guassian one
+    starting_price: u32,
     pub historical_prices: Vec<u32>,
     conditions: Vec<(usize, StonkCondition)>,
 }
@@ -373,10 +373,13 @@ impl Stonk {
             Normal::new(self.drift, self.volatility)
                 .expect("Failed to sample tick distribution")
                 .sample(rng)
-        };
+        }
+        .min(MAX_DRIFT)
+        .max(MIN_DRIFT);
 
         self.price_per_share_in_cents =
             (self.price_per_share_in_cents as f64 * (1.0 + price_drift)) as u32;
+
         self.historical_prices.push(self.price_per_share_in_cents);
 
         println!(
@@ -399,10 +402,10 @@ impl Stonk {
             }
         }
 
-        self.drift = self.drift.min(MAX_DRIFT).max(MIN_DRIFT);
+        // self.drift = self.drift.min(MAX_DRIFT).max(MIN_DRIFT);
 
         // Add recovery mechanism for falling stonks. not ideal.
-        if (self.price_per_share_in_cents as f64) < self.starting_price as f64 / 10.0 {
+        if (self.price_per_share_in_cents as f64) < self.starting_price as f64 / 8.0 {
             self.add_condition(StonkCondition::BumpUp, current_tick + 1);
             self.add_condition(
                 StonkCondition::NoShock(self.shock_probability),

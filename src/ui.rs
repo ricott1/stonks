@@ -373,7 +373,6 @@ fn render_night(
     frame: &mut Frame,
     counter: usize,
     ui_options: UiOptions,
-    number_of_players: usize,
     area: Rect,
 ) -> AppResult<()> {
     let total_width = CARD_WIDTH * 3 + 7;
@@ -423,13 +422,8 @@ fn render_night(
         frame.render_widget(Paragraph::new(card), cards_split[i]);
     }
     frame.render_widget(
-        Paragraph::new(format!(
-            "{} player{} online!\nGet ready to",
-            number_of_players,
-            if number_of_players > 1 { "s" } else { "" }
-        ))
-        .centered(),
-        v_split[1],
+        Paragraph::new(format!("Get ready to",)).centered(),
+        v_split[2],
     );
     frame.render_widget(Paragraph::new(STONKS_LINES.clone()).centered(), v_split[2]);
     frame.render_widget(
@@ -642,9 +636,11 @@ pub fn render(
 
     frame.render_widget(
         Paragraph::new(format!(
-            "Day {} {}",
+            "Day {} {} - {} player{} online",
             market.cycles + 1,
-            market.phase.formatted_time()
+            market.phase.formatted_time(),
+            number_of_players,
+            if number_of_players > 1 { "s" } else { "" }
         )),
         split[0],
     );
@@ -653,9 +649,7 @@ pub fn render(
         UiDisplay::Portfolio => {}
         UiDisplay::Stonks => match market.phase {
             GamePhase::Day { .. } => render_day(frame, market, ui_options, agent, split[1])?,
-            GamePhase::Night { counter } => {
-                render_night(frame, counter, ui_options, number_of_players, split[1])?
-            }
+            GamePhase::Night { counter } => render_night(frame, counter, ui_options, split[1])?,
         },
     }
 
