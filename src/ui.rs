@@ -1,10 +1,11 @@
 use std::fmt::{self};
 
 use crate::agent::{DecisionAgent, UserAgent};
-use crate::stonk::{GamePhase, Market, Stonk, PHASE_LENGTH};
+use crate::stonk::{GamePhase, Market, Stonk, DAY_LENGTH};
 use crate::utils::{img_to_lines, AppResult};
 use crossterm::event::KeyCode;
-use ratatui::layout::Constraint;
+use once_cell::sync::Lazy;
+use ratatui::layout::{Constraint, Margin};
 use ratatui::style::palette::tailwind;
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::symbols;
@@ -23,6 +24,25 @@ const STONKS: [&'static str; 6] = [
     "███████║   ██║   ╚██████╔╝██║ ╚████║██║  ██╗███████║██╗",
     "╚══════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝╚═╝",
 ];
+
+static STONKS_LINES: Lazy<Vec<Line>> = Lazy::new(|| {
+    STONKS
+        .iter()
+        .map(|&s| Line::from(s).style(Style::default().green()))
+        .collect::<Vec<Line>>()
+});
+
+static STONKS_CARDS: Lazy<Vec<Vec<Line>>> = Lazy::new(|| {
+    (1..=13)
+        .map(|n| {
+            img_to_lines(format!("card_back{:02}.png", n).as_str())
+                .expect("Cannot load stonk image")
+        })
+        .collect::<Vec<Vec<Line>>>()
+});
+
+const CARD_WIDTH: u16 = 28;
+const CARD_HEIGHT: u16 = 40 / 2;
 
 const PALETTES: [tailwind::Palette; 5] = [
     tailwind::BLUE,
@@ -96,6 +116,7 @@ pub struct UiOptions {
     selected_stonk_index: usize,
     palette_index: usize,
     zoom_level: ZoomLevel,
+    pub render_counter: usize,
 }
 
 impl UiOptions {
@@ -106,6 +127,7 @@ impl UiOptions {
             selected_stonk_index: 0,
             palette_index: 0,
             zoom_level: ZoomLevel::Short,
+            render_counter: 0,
         }
     }
 
@@ -195,7 +217,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
             _ => colors.alt_row_color,
         };
 
-        let n = market.last_tick % PHASE_LENGTH;
+        let n = market.last_tick % DAY_LENGTH;
         let style = if n > 0 {
             let last_n_prices = stonk.historical_prices.iter().rev().take(n);
             let last_len = last_n_prices.len() as u32;
@@ -215,7 +237,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
             Style::default()
         };
 
-        let today_initial_price = stonk.historical_prices[stonk.historical_prices.len() - n];
+        let today_initial_price = stonk.historical_prices[stonk.historical_prices.len() - n - 1];
         let today_variation = if today_initial_price > 0 {
             (stonk.price_per_share_in_cents as f64 - today_initial_price as f64)
                 / today_initial_price as f64
@@ -275,8 +297,20 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
             Style::default().cyan()
         } else if agent_share >= 0.01 {
             Style::default().light_cyan()
-        } else if agent_share >= 0.001 {
-            Style::default().light_green()
+        } else {
+            Style::default()
+        };
+
+        let agent_stonk_value = (agent
+            .owned_stonks()
+            .get(&stonk.id)
+            .copied()
+            .unwrap_or_default() as f64
+            * (stonk.price_per_share_in_cents as f64 / 100.0))
+            as u32;
+
+        let agent_stonk_style = if agent_stonk_value > 0 {
+            style
         } else {
             Style::default()
         };
@@ -288,16 +322,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
             Cell::new(format!("\n{:+.2}%", today_variation)).style(today_style),
             Cell::new(format!("\n{:+.2}%", max_variation)).style(max_style),
             Cell::new(format!("\n{:.2}%", agent_share)).style(agent_style),
-            Cell::new(format!(
-                "\n${:+.2}",
-                agent
-                    .owned_stonks()
-                    .get(&stonk.id)
-                    .copied()
-                    .unwrap_or_default() as f64
-                    * (stonk.price_per_share_in_cents as f64 / 100.0)
-            ))
-            .style(style),
+            Cell::new(format!("\n${}", agent_stonk_value)).style(agent_stonk_style),
         ])
         .style(Style::new().fg(colors.row_fg).bg(color))
         .height(3)
@@ -343,31 +368,59 @@ fn render_day(
     Ok(())
 }
 
-fn render_night(frame: &mut Frame, counter: usize, number_of_players: usize) -> AppResult<()> {
+fn render_night(
+    frame: &mut Frame,
+    counter: usize,
+    ui_options: UiOptions,
+    number_of_players: usize,
+) -> AppResult<()> {
     let area = frame.size();
-    let img_width = STONKS[0].len() as u16;
-    let side_length = if area.width > img_width {
-        (area.width - img_width) / 2
+    let total_width = CARD_WIDTH * 3 + 7;
+    let side_length = if area.width > total_width {
+        (area.width - total_width) / 2
     } else {
         0
     };
     let split = Layout::horizontal([
         Constraint::Length(side_length),
-        Constraint::Length(img_width),
+        Constraint::Length(total_width),
         Constraint::Length(side_length),
     ])
     .split(area);
 
     let v_split = Layout::vertical([
-        Constraint::Max(img_width / 2),
+        Constraint::Max(CARD_HEIGHT),
         Constraint::Length(2),
         Constraint::Length(7),
         Constraint::Length(2),
     ])
-    .split(split[1]);
+    .split(split[1].inner(&Margin {
+        horizontal: 0,
+        vertical: 1,
+    }));
 
-    let stonks = img_to_lines("stonk.png").expect("Cannot load stonk image");
-    frame.render_widget(Paragraph::new(stonks), v_split[0]);
+    let cards_split = Layout::horizontal([
+        Constraint::Min(0),
+        Constraint::Length(CARD_WIDTH),
+        Constraint::Length(1),
+        Constraint::Length(CARD_WIDTH),
+        Constraint::Length(1),
+        Constraint::Length(CARD_WIDTH),
+        Constraint::Min(0),
+    ])
+    .split(v_split[0].inner(&Margin {
+        horizontal: 1,
+        vertical: 0,
+    }));
+
+    for i in (1..=5).step_by(2) {
+        let card = if ui_options.render_counter <= 3 * STONKS_CARDS.len() {
+            STONKS_CARDS[(ui_options.render_counter / 3) % STONKS_CARDS.len()].clone()
+        } else {
+            STONKS_CARDS[STONKS_CARDS.len() - 1].clone()
+        };
+        frame.render_widget(Paragraph::new(card), cards_split[i]);
+    }
     frame.render_widget(
         Paragraph::new(format!(
             "{} player{} online!\nGet ready to",
@@ -377,16 +430,7 @@ fn render_night(frame: &mut Frame, counter: usize, number_of_players: usize) -> 
         .centered(),
         v_split[1],
     );
-    frame.render_widget(
-        Paragraph::new(
-            STONKS
-                .iter()
-                .map(|&s| Line::from(s).style(Style::default().green()))
-                .collect::<Vec<Line>>(),
-        )
-        .centered(),
-        v_split[2],
-    );
+    frame.render_widget(Paragraph::new(STONKS_LINES.clone()).centered(), v_split[2]);
     frame.render_widget(
         Paragraph::new(format!("in {}", counter)).centered(),
         v_split[3],
@@ -590,7 +634,9 @@ pub fn render(
         UiDisplay::Portfolio => {}
         UiDisplay::Stonks => match market.phase {
             GamePhase::Day { .. } => render_day(frame, market, ui_options, agent)?,
-            GamePhase::Night { counter } => render_night(frame, counter, number_of_players)?,
+            GamePhase::Night { counter } => {
+                render_night(frame, counter, ui_options, number_of_players)?
+            }
         },
     }
 

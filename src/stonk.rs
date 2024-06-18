@@ -11,8 +11,9 @@ pub enum GamePhase {
     Night { counter: usize },
 }
 
-pub const PHASE_LENGTH: usize = 240;
-pub const HISTORICAL_SIZE: usize = PHASE_LENGTH * 4;
+pub const DAY_LENGTH: usize = 240;
+pub const NIGHT_LENGTH: usize = 30;
+pub const HISTORICAL_SIZE: usize = DAY_LENGTH * 4;
 
 const MIN_DRIFT: f64 = -0.01;
 const MAX_DRIFT: f64 = 0.01;
@@ -124,15 +125,21 @@ impl Market {
 
         let mut m = Market {
             stonks,
-            last_tick: 1,
+            last_tick: 0,
             phase: GamePhase::Day {
-                counter: PHASE_LENGTH,
+                counter: DAY_LENGTH,
             },
         };
 
-        for _ in 0..HISTORICAL_SIZE {
+        for _ in 0..DAY_LENGTH {
             m.tick();
         }
+
+        // for _ in 0..DAY_LENGTH {
+        //     m.tick();
+        // }
+
+        println!("Starting market at {:?}", m.phase);
 
         m
     }
@@ -160,14 +167,14 @@ impl Market {
             volatility: volatility.max(0.001).min(0.99),
             shock_probability,
             starting_price: price_per_share_in_cents,
-            historical_prices: vec![price_per_share_in_cents],
+            historical_prices: vec![],
             conditions: vec![],
         }
     }
 
     pub fn tick_day(&mut self) {
         let rng = &mut rand::thread_rng();
-        let global_drift = if self.last_tick % PHASE_LENGTH == 0 {
+        let global_drift = if self.last_tick % DAY_LENGTH == 0 {
             Some(rng.gen_range(-0.01..0.01))
         } else {
             None
@@ -176,7 +183,7 @@ impl Market {
             if let Some(drift) = global_drift {
                 stonk.add_condition(
                     StonkCondition::GlobalDrift(drift),
-                    self.last_tick + PHASE_LENGTH,
+                    self.last_tick + DAY_LENGTH,
                 );
             }
             stonk.tick(self.last_tick);
@@ -194,6 +201,7 @@ impl Market {
 
 impl StonkMarket for Market {
     fn tick(&mut self) {
+        println!("\nMarket tick {:?}", self.phase);
         match self.phase {
             GamePhase::Day { counter } => {
                 self.tick_day();
@@ -203,7 +211,7 @@ impl StonkMarket for Market {
                     }
                 } else {
                     self.phase = GamePhase::Night {
-                        counter: PHASE_LENGTH / 10,
+                        counter: NIGHT_LENGTH,
                     }
                 }
             }
@@ -215,7 +223,7 @@ impl StonkMarket for Market {
                     }
                 } else {
                     self.phase = GamePhase::Day {
-                        counter: PHASE_LENGTH,
+                        counter: DAY_LENGTH,
                     }
                 }
             }
@@ -345,7 +353,7 @@ impl Stonk {
         self.historical_prices.push(self.price_per_share_in_cents);
 
         println!(
-            "{:16}: Median={:+.5} Scale={:.5} price_drift={:+.5} new price={}\n",
+            "{:16}: Median={:+.5} Scale={:.5} price_drift={:+.5} new price={}",
             self.name, self.drift, self.volatility, price_drift, self.price_per_share_in_cents
         );
 

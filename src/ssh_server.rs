@@ -1,6 +1,6 @@
 use crate::agent::{AgentAction, DecisionAgent, UserAgent};
 use crate::ssh_backend::SSHBackend;
-use crate::stonk::{Market, StonkMarket};
+use crate::stonk::{GamePhase, Market, StonkMarket};
 use crate::tui::Tui;
 use crate::ui::UiOptions;
 use crate::utils::AppResult;
@@ -170,39 +170,43 @@ impl AppServer {
         tokio::spawn(async move {
             let mut last_market_tick = SystemTime::now();
             loop {
-                tokio::time::sleep(tokio::time::Duration::from_millis(20)).await;
+                tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
                 let mut clients = clients.lock().await;
-                let number_of_players = clients.len();
-
                 let mut market = market.lock().await;
+
+                clients.retain(|_, c| {
+                    c.last_action.elapsed().expect("Time flows")
+                        <= Duration::from_secs(MAX_TIMEOUT_SECONDS)
+                });
+                let number_of_players = clients.len();
 
                 for (id, client) in clients.iter_mut() {
                     market
                         .apply_agent_action::<UserAgent>(&mut client.agent)
                         .unwrap_or_else(|e| println!("Could not apply agent {} action: {}", id, e));
+                    // client
+                    //     .tui
+                    //     .draw(&market, client.ui_options, &client.agent, number_of_players)
+                    //     .unwrap_or_else(|e| debug!("Failed to draw: {}", e));
+                }
+
+                for (_, client) in clients.iter_mut() {
+                    match market.phase {
+                        GamePhase::Day { .. } => client.ui_options.render_counter = 0,
+                        GamePhase::Night { .. } => client.ui_options.render_counter += 1,
+                    }
+
                     client
                         .tui
                         .draw(&market, client.ui_options, &client.agent, number_of_players)
                         .unwrap_or_else(|e| debug!("Failed to draw: {}", e));
                 }
 
-                clients.retain(|_, c| {
-                    c.last_action.elapsed().expect("Time flows")
-                        <= Duration::from_secs(MAX_TIMEOUT_SECONDS)
-                });
-
                 if last_market_tick.elapsed().expect("Time flows backwards")
                     > Duration::from_millis(1000)
                 {
                     market.tick();
-
-                    for (_, client) in clients.iter_mut() {
-                        client
-                            .tui
-                            .draw(&market, client.ui_options, &client.agent, number_of_players)
-                            .unwrap_or_else(|e| debug!("Failed to draw: {}", e));
-                    }
                     last_market_tick = SystemTime::now();
                 }
             }
