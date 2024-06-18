@@ -117,6 +117,7 @@ pub struct UiOptions {
     palette_index: usize,
     zoom_level: ZoomLevel,
     pub render_counter: usize,
+    pub selected_event_card: Option<usize>,
 }
 
 impl UiOptions {
@@ -128,6 +129,7 @@ impl UiOptions {
             palette_index: 0,
             zoom_level: ZoomLevel::Short,
             render_counter: 0,
+            selected_event_card: None,
         }
     }
 
@@ -146,6 +148,22 @@ impl UiOptions {
                     self.focus_on_stonk = Some((index + 8 - 1) % 8)
                 } else {
                     self.selected_stonk_index = (self.selected_stonk_index + 8 - 1) % 8;
+                }
+            }
+
+            crossterm::event::KeyCode::Left => {
+                if let Some(idx) = self.selected_event_card {
+                    self.selected_event_card = Some((idx + 3 - 1) % 3)
+                } else {
+                    self.selected_event_card = Some(0)
+                }
+            }
+
+            crossterm::event::KeyCode::Right => {
+                if let Some(idx) = self.selected_event_card {
+                    self.selected_event_card = Some((idx + 1) % 3)
+                } else {
+                    self.selected_event_card = Some(0)
                 }
             }
 
@@ -394,7 +412,7 @@ fn render_night(
     .split(area);
 
     let v_split = Layout::vertical([
-        Constraint::Max(CARD_HEIGHT),
+        Constraint::Max(CARD_HEIGHT + 2),
         Constraint::Length(2),
         Constraint::Length(7),
         Constraint::Length(2),
@@ -406,11 +424,9 @@ fn render_night(
 
     let cards_split = Layout::horizontal([
         Constraint::Min(0),
-        Constraint::Length(CARD_WIDTH),
-        Constraint::Length(1),
-        Constraint::Length(CARD_WIDTH),
-        Constraint::Length(1),
-        Constraint::Length(CARD_WIDTH),
+        Constraint::Length(CARD_WIDTH + 4),
+        Constraint::Length(CARD_WIDTH + 4),
+        Constraint::Length(CARD_WIDTH + 4),
         Constraint::Min(0),
     ])
     .split(v_split[0].inner(&Margin {
@@ -418,26 +434,44 @@ fn render_night(
         vertical: 0,
     }));
 
-    for i in (1..=5).step_by(2) {
+    for i in 0..3 {
         // If there is not more than half of the time still available, skip the animation
-
         if counter > NIGHT_LENGTH / 2 && ui_options.render_counter < 3 * STONKS_CARDS.len() {
             frame.render_widget(
                 Paragraph::new(
                     STONKS_CARDS[(ui_options.render_counter / 3) % STONKS_CARDS.len()].clone(),
                 ),
-                cards_split[i],
+                cards_split[i + 1].inner(&Margin {
+                    horizontal: 1,
+                    vertical: 1,
+                }),
             );
         } else {
-            frame.render_widget(
-                Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone()),
-                cards_split[i],
-            );
+            if ui_options.selected_event_card.is_some()
+                && ui_options.selected_event_card.unwrap() == i
+            {
+                frame.render_widget(
+                    Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone())
+                        .block(Block::bordered().border_style(Style::default().red().on_red())),
+                    cards_split[i + 1].inner(&Margin {
+                        horizontal: 1,
+                        vertical: 1,
+                    }),
+                );
+            } else {
+                frame.render_widget(
+                    Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone()),
+                    cards_split[i + 1].inner(&Margin {
+                        horizontal: 1,
+                        vertical: 1,
+                    }),
+                );
+            }
             frame.render_widget(
                 Paragraph::new(format!("TEST {i}").bold().black()).centered(),
-                cards_split[i].inner(&Margin {
-                    horizontal: 2,
-                    vertical: 3,
+                cards_split[i + 1].inner(&Margin {
+                    horizontal: 3,
+                    vertical: 4,
                 }),
             );
         }

@@ -196,7 +196,10 @@ impl AppServer {
 
                 for (_, client) in clients.iter_mut() {
                     match market.phase {
-                        GamePhase::Day { .. } => client.ui_options.render_counter = 0,
+                        GamePhase::Day { .. } => {
+                            client.ui_options.render_counter = 0;
+                            client.ui_options.selected_event_card = None;
+                        }
                         GamePhase::Night { .. } => client.ui_options.render_counter += 1,
                     }
 
