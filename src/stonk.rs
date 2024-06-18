@@ -69,8 +69,8 @@ impl Market {
                 9800,
                 2500,
                 0.01,
-                0.025,
-                0.002,
+                0.01,
+                0.001,
                 0.01,
             ),
             Market::new_stonk(
@@ -383,8 +383,13 @@ impl Stonk {
         self.historical_prices.push(self.price_per_share_in_cents);
 
         println!(
-            "{:15}: μ={:+.5} Δ={:.5} Δprice={:+.5} price={}",
-            self.name, self.drift, self.volatility, price_drift, self.price_per_share_in_cents
+            "{:15} μ={:+.5} σ={:.5} Δ={:+.5} price={}\n{:?}",
+            self.name,
+            self.drift,
+            self.volatility,
+            price_drift,
+            self.price_per_share_in_cents,
+            self.conditions,
         );
 
         self.drift /= 2.0;
@@ -407,6 +412,12 @@ impl Stonk {
         // Add recovery mechanism for falling stonks. not ideal.
         if (self.price_per_share_in_cents as f64) < self.starting_price as f64 / 8.0 {
             self.add_condition(StonkCondition::BumpUp, current_tick + 1);
+            self.add_condition(
+                StonkCondition::NoShock(self.shock_probability),
+                current_tick + 1,
+            );
+        } else if (self.price_per_share_in_cents as f64) > self.starting_price as f64 * 16.0 {
+            self.add_condition(StonkCondition::BumpDown, current_tick + 1);
             self.add_condition(
                 StonkCondition::NoShock(self.shock_probability),
                 current_tick + 1,

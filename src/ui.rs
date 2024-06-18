@@ -1,7 +1,7 @@
 use std::fmt::{self};
 
 use crate::agent::{DecisionAgent, UserAgent};
-use crate::stonk::{GamePhase, Market, Stonk, DAY_LENGTH};
+use crate::stonk::{GamePhase, Market, Stonk, DAY_LENGTH, NIGHT_LENGTH};
 use crate::utils::{img_to_lines, AppResult};
 use crossterm::event::KeyCode;
 use once_cell::sync::Lazy;
@@ -220,15 +220,20 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
         let n = market.last_tick % DAY_LENGTH;
         let style = if n > 0 {
             let last_n_prices = stonk.historical_prices.iter().rev().take(n);
-            let last_len = last_n_prices.len() as u32;
-            let last_minute_avg_price = last_n_prices.sum::<u32>() / last_len;
-            if last_minute_avg_price > stonk.price_per_share_in_cents / 4 * 5 {
+            let last_len = last_n_prices.len() as f64;
+            let mut last_minute_avg_price = 0.0;
+
+            for p in last_n_prices {
+                last_minute_avg_price += *p as f64 / last_len;
+            }
+
+            if last_minute_avg_price > stonk.price_per_share_in_cents as f64 / 4.0 * 5.0 {
                 Style::default().red()
-            } else if last_minute_avg_price > stonk.price_per_share_in_cents {
+            } else if last_minute_avg_price > stonk.price_per_share_in_cents as f64 {
                 Style::default().yellow()
-            } else if last_minute_avg_price < stonk.price_per_share_in_cents * 5 / 4 {
+            } else if last_minute_avg_price < stonk.price_per_share_in_cents as f64 / 4.0 * 5.0 {
                 Style::default().light_green()
-            } else if last_minute_avg_price < stonk.price_per_share_in_cents {
+            } else if last_minute_avg_price < stonk.price_per_share_in_cents as f64 {
                 Style::default().green()
             } else {
                 Style::default()
@@ -414,11 +419,13 @@ fn render_night(
     }));
 
     for i in (1..=5).step_by(2) {
-        let card = if ui_options.render_counter < 3 * STONKS_CARDS.len() {
-            STONKS_CARDS[(ui_options.render_counter / 3) % STONKS_CARDS.len()].clone()
-        } else {
-            STONKS_CARDS[STONKS_CARDS.len() - 1].clone()
-        };
+        // If there is not more than half of the time still available, skip the animation
+        let card =
+            if counter > NIGHT_LENGTH / 2 && ui_options.render_counter < 3 * STONKS_CARDS.len() {
+                STONKS_CARDS[(ui_options.render_counter / 3) % STONKS_CARDS.len()].clone()
+            } else {
+                STONKS_CARDS[STONKS_CARDS.len() - 1].clone()
+            };
         frame.render_widget(Paragraph::new(card), cards_split[i]);
     }
     frame.render_widget(
