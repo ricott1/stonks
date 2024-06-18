@@ -379,7 +379,7 @@ fn render_day(
 ) -> AppResult<()> {
     if let Some(stonk_id) = ui_options.focus_on_stonk {
         let stonk = &market.stonks[stonk_id];
-        render_stonk(frame, market, ui_options, agent, stonk)?;
+        render_stonk(frame, market, ui_options, agent, stonk, area)?;
     } else {
         let colors = TableColors::new(&PALETTES[ui_options.palette_index]);
         let table = build_stonks_table(market, agent, colors);
@@ -453,10 +453,7 @@ fn render_night(
                 frame.render_widget(
                     Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone())
                         .block(Block::bordered().border_style(Style::default().red().on_red())),
-                    cards_split[i + 1].inner(&Margin {
-                        horizontal: 1,
-                        vertical: 1,
-                    }),
+                    cards_split[i + 1],
                 );
             } else {
                 frame.render_widget(
@@ -491,9 +488,8 @@ fn render_stonk(
     ui_options: UiOptions,
     agent: &UserAgent,
     stonk: &Stonk,
+    area: Rect,
 ) -> AppResult<()> {
-    let area = frame.size();
-
     let split = Layout::vertical([
         Constraint::Min(0),
         Constraint::Length(1),
