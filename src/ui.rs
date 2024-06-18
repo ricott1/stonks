@@ -420,23 +420,34 @@ fn render_night(
 
     for i in (1..=5).step_by(2) {
         // If there is not more than half of the time still available, skip the animation
-        let card =
-            if counter > NIGHT_LENGTH / 2 && ui_options.render_counter < 3 * STONKS_CARDS.len() {
-                STONKS_CARDS[(ui_options.render_counter / 3) % STONKS_CARDS.len()].clone()
-            } else {
-                STONKS_CARDS[STONKS_CARDS.len() - 1].clone()
-            };
-        frame.render_widget(Paragraph::new(card), cards_split[i]);
+
+        if counter > NIGHT_LENGTH / 2 && ui_options.render_counter < 3 * STONKS_CARDS.len() {
+            frame.render_widget(
+                Paragraph::new(
+                    STONKS_CARDS[(ui_options.render_counter / 3) % STONKS_CARDS.len()].clone(),
+                ),
+                cards_split[i],
+            );
+        } else {
+            frame.render_widget(
+                Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone()),
+                cards_split[i],
+            );
+            frame.render_widget(
+                Paragraph::new(format!("TEST {i}").bold().black()).centered(),
+                cards_split[i].inner(&Margin {
+                    horizontal: 2,
+                    vertical: 3,
+                }),
+            );
+        }
     }
     frame.render_widget(
         Paragraph::new(format!("Get ready to",)).centered(),
         v_split[2],
     );
     frame.render_widget(Paragraph::new(STONKS_LINES.clone()).centered(), v_split[2]);
-    frame.render_widget(
-        Paragraph::new(format!("in {}", counter)).centered(),
-        v_split[3],
-    );
+
     Ok(())
 }
 
