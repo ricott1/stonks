@@ -28,6 +28,7 @@ pub struct Market {
     pub stonks: [Stonk; 8],
     pub last_tick: usize,
     pub phase: GamePhase,
+    pub cycles: usize,
 }
 
 impl Market {
@@ -129,15 +130,12 @@ impl Market {
             phase: GamePhase::Day {
                 counter: DAY_LENGTH,
             },
+            cycles: 0,
         };
 
-        for _ in 0..DAY_LENGTH {
+        while m.cycles < HISTORICAL_SIZE / DAY_LENGTH {
             m.tick();
         }
-
-        // for _ in 0..DAY_LENGTH {
-        //     m.tick();
-        // }
 
         println!("Starting market at {:?}", m.phase);
 
@@ -220,11 +218,12 @@ impl StonkMarket for Market {
                 if counter > 0 {
                     self.phase = GamePhase::Night {
                         counter: counter - 1,
-                    }
+                    };
                 } else {
                     self.phase = GamePhase::Day {
                         counter: DAY_LENGTH,
-                    }
+                    };
+                    self.cycles += 1;
                 }
             }
         }
