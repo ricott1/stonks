@@ -168,18 +168,26 @@ impl UiOptions {
     }
 }
 
-fn build_stonks_table<'a>(market: &Market, colors: TableColors) -> Table<'a> {
+fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColors) -> Table<'a> {
     let header_style = Style::default().fg(colors.header_fg).bg(colors.header_bg);
     let selected_style = Style::default()
         .add_modifier(Modifier::REVERSED)
         .fg(colors.selected_style_fg);
 
-    let header = ["Stonk", "Buy $", "Sell $", "Today +/-", "Max +/-"]
-        .into_iter()
-        .map(Cell::from)
-        .collect::<Row>()
-        .style(header_style)
-        .height(1);
+    let header = [
+        "Stonk",
+        "Buy $",
+        "Sell $",
+        "Today +/-",
+        "Max +/-",
+        "Owned",
+        "Value",
+    ]
+    .into_iter()
+    .map(Cell::from)
+    .collect::<Row>()
+    .style(header_style)
+    .height(1);
 
     let rows = market.stonks.iter().enumerate().map(|(i, stonk)| {
         let color = match i % 2 {
@@ -218,13 +226,13 @@ fn build_stonks_table<'a>(market: &Market, colors: TableColors) -> Table<'a> {
 
         let today_style = if today_variation > 5.0 {
             Style::default().green()
-        } else if today_variation > 1.0 {
+        } else if today_variation >= 1.0 {
             Style::default().green()
-        } else if today_variation > 0.1 {
+        } else if today_variation >= 0.1 {
             Style::default().light_green()
-        } else if today_variation < -1.0 {
+        } else if today_variation <= -1.0 {
             Style::default().red()
-        } else if today_variation < -0.1 {
+        } else if today_variation <= -0.1 {
             Style::default().yellow()
         } else {
             Style::default()
@@ -240,14 +248,35 @@ fn build_stonks_table<'a>(market: &Market, colors: TableColors) -> Table<'a> {
 
         let max_style = if max_variation > 5.0 {
             Style::default().green()
-        } else if max_variation > 5.0 {
+        } else if max_variation >= 5.0 {
             Style::default().green()
-        } else if max_variation > 0.5 {
+        } else if max_variation >= 0.5 {
             Style::default().light_green()
-        } else if max_variation < -5.0 {
+        } else if max_variation <= -5.0 {
             Style::default().red()
-        } else if max_variation < -0.5 {
+        } else if max_variation <= -0.5 {
             Style::default().yellow()
+        } else {
+            Style::default()
+        };
+
+        let agent_share = agent
+            .owned_stonks()
+            .get(&stonk.id)
+            .copied()
+            .unwrap_or_default() as f64
+            / stonk.number_of_shares as f64;
+
+        let agent_style = if agent_share >= 5.0 {
+            Style::default().magenta()
+        } else if agent_share >= 1.0 {
+            Style::default().light_magenta()
+        } else if agent_share >= 0.1 {
+            Style::default().cyan()
+        } else if agent_share >= 0.01 {
+            Style::default().light_cyan()
+        } else if agent_share >= 0.001 {
+            Style::default().light_green()
         } else {
             Style::default()
         };
@@ -258,6 +287,17 @@ fn build_stonks_table<'a>(market: &Market, colors: TableColors) -> Table<'a> {
             Cell::new(format!("\n${:.2}", stonk.formatted_sell_price())).style(style),
             Cell::new(format!("\n{:+.2}%", today_variation)).style(today_style),
             Cell::new(format!("\n{:+.2}%", max_variation)).style(max_style),
+            Cell::new(format!("\n{:.2}%", agent_share)).style(agent_style),
+            Cell::new(format!(
+                "\n${:+.2}",
+                agent
+                    .owned_stonks()
+                    .get(&stonk.id)
+                    .copied()
+                    .unwrap_or_default() as f64
+                    * (stonk.price_per_share_in_cents as f64 / 100.0)
+            ))
+            .style(style),
         ])
         .style(Style::new().fg(colors.row_fg).bg(color))
         .height(3)
@@ -267,6 +307,8 @@ fn build_stonks_table<'a>(market: &Market, colors: TableColors) -> Table<'a> {
         rows,
         [
             Constraint::Length(24),
+            Constraint::Length(10),
+            Constraint::Length(10),
             Constraint::Length(10),
             Constraint::Length(10),
             Constraint::Length(10),
@@ -291,7 +333,7 @@ fn render_day(
         render_stonk(frame, market, ui_options, agent, stonk)?;
     } else {
         let colors = TableColors::new(&PALETTES[ui_options.palette_index]);
-        let table = build_stonks_table(market, colors);
+        let table = build_stonks_table(market, agent, colors);
         frame.render_stateful_widget(
             table,
             frame.size(),

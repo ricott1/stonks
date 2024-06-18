@@ -26,7 +26,6 @@ pub trait StonkMarket {
 pub struct Market {
     pub stonks: [Stonk; 8],
     pub last_tick: usize,
-    pub global_drift: f64,
     pub phase: GamePhase,
 }
 
@@ -126,7 +125,6 @@ impl Market {
         let mut m = Market {
             stonks,
             last_tick: 1,
-            global_drift: 0.0,
             phase: GamePhase::Day {
                 counter: PHASE_LENGTH,
             },
@@ -161,17 +159,27 @@ impl Market {
             drift_volatility,
             volatility: volatility.max(0.001).min(0.99),
             shock_probability,
+            starting_price: price_per_share_in_cents,
             historical_prices: vec![price_per_share_in_cents],
+            conditions: vec![],
         }
     }
 
     pub fn tick_day(&mut self) {
         let rng = &mut rand::thread_rng();
-        if self.last_tick % PHASE_LENGTH == 0 {
-            self.global_drift = rng.gen_range(-0.005..0.005);
-        }
+        let global_drift = if self.last_tick % PHASE_LENGTH == 0 {
+            Some(rng.gen_range(-0.01..0.01))
+        } else {
+            None
+        };
         for stonk in self.stonks.iter_mut() {
-            stonk.tick(self.global_drift);
+            if let Some(drift) = global_drift {
+                stonk.add_condition(
+                    StonkCondition::GlobalDrift(drift),
+                    self.last_tick + PHASE_LENGTH,
+                );
+            }
+            stonk.tick(self.last_tick);
             while stonk.historical_prices.len() > HISTORICAL_SIZE {
                 stonk.historical_prices.remove(0);
             }
@@ -227,7 +235,7 @@ impl StonkMarket for Market {
                         agent.sub_cash(cost)?;
                         agent.add_stonk(stonk_id, amount)?;
                         stonk.allocated_shares += 1;
-                        stonk.drift = (stonk.drift + stonk.drift_volatility).min(1.0);
+                        stonk.add_condition(StonkCondition::BumpUp, self.last_tick + 1);
                     }
                     AgentAction::Sell { stonk_id, amount } => {
                         let stonk = &mut self.stonks[stonk_id];
@@ -235,7 +243,7 @@ impl StonkMarket for Market {
                         agent.sub_stonk(stonk_id, amount)?;
                         agent.add_cash(cost)?;
                         stonk.allocated_shares -= 1;
-                        stonk.drift = (stonk.drift - stonk.drift_volatility).max(-1.0);
+                        stonk.add_condition(StonkCondition::BumpDown, self.last_tick + 1);
                     }
                 },
                 None => {}
@@ -251,12 +259,20 @@ impl StonkMarket for Market {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum StonkClass {
     Media,
     War,
     Commodity,
     Technology,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum StonkCondition {
+    BumpUp,
+    BumpDown,
+    GlobalDrift(f64),
+    NoShock(f64),
 }
 
 #[derive(Debug, Clone)]
@@ -271,7 +287,9 @@ pub struct Stonk {
     pub drift_volatility: f64, // Influences the rate of change of drift
     pub volatility: f64, // Cauchy dist variance, changes the variance of the price percentage variation
     pub shock_probability: f64, // probability to select the Cauchy dist rather than the Guassian one
+    pub starting_price: u32,
     pub historical_prices: Vec<u32>,
+    conditions: Vec<(usize, StonkCondition)>,
 }
 
 impl Stonk {
@@ -279,9 +297,34 @@ impl Stonk {
         self.price_per_share_in_cents as u32 * self.number_of_shares as u32
     }
 
-    pub fn tick(&mut self, global_drift: f64) {
-        let rng = &mut rand::thread_rng();
+    pub fn apply_conditions(&mut self, current_tick: usize) {
+        for (until_tick, condition) in self.conditions.iter() {
+            match condition {
+                StonkCondition::BumpUp => self.drift += self.drift_volatility,
+                StonkCondition::BumpDown => self.drift -= self.drift_volatility,
+                StonkCondition::GlobalDrift(drift) => self.drift += drift * self.drift_volatility,
+                StonkCondition::NoShock(previous_shock_probability) => {
+                    if *until_tick > current_tick {
+                        self.shock_probability = 0.0
+                    } else {
+                        self.shock_probability = *previous_shock_probability
+                    }
+                }
+            }
+        }
 
+        self.conditions
+            .retain(|(until_tick, _)| *until_tick > current_tick);
+    }
+
+    pub fn add_condition(&mut self, condition: StonkCondition, until_tick: usize) {
+        self.conditions.push((until_tick, condition));
+    }
+
+    pub fn tick(&mut self, current_tick: usize) {
+        self.apply_conditions(current_tick);
+
+        let rng = &mut rand::thread_rng();
         let price_drift = if rng.gen_bool(self.shock_probability) {
             Cauchy::new(self.drift, self.volatility)
                 .expect("Failed to sample tick distribution")
@@ -299,30 +342,38 @@ impl Stonk {
 
         self.price_per_share_in_cents =
             (self.price_per_share_in_cents as f64 * (1.0 + price_drift)) as u32;
+        self.historical_prices.push(self.price_per_share_in_cents);
+
         println!(
             "{:16}: Median={:+.5} Scale={:.5} price_drift={:+.5} new price={}\n",
             self.name, self.drift, self.volatility, price_drift, self.price_per_share_in_cents
         );
 
-        self.drift /= 25.0;
+        self.drift /= 10.0;
         if price_drift > 0.0 {
             if self.drift > 0.0 {
-                self.drift += self.drift_volatility;
+                self.add_condition(StonkCondition::BumpUp, current_tick + 1);
             } else {
-                self.drift += 2.0 * self.drift_volatility;
+                self.add_condition(StonkCondition::BumpUp, current_tick + 3);
             }
         } else if price_drift < 0.0 {
             if self.drift > 0.0 {
-                self.drift -= 2.0 * self.drift_volatility;
+                self.add_condition(StonkCondition::BumpDown, current_tick + 3);
             } else {
-                self.drift -= self.drift_volatility;
+                self.add_condition(StonkCondition::BumpDown, current_tick + 1);
             }
         }
-        self.drift += global_drift * self.drift_volatility;
 
         self.drift = self.drift.min(MAX_DRIFT).max(MIN_DRIFT);
 
-        self.historical_prices.push(self.price_per_share_in_cents);
+        // Add recovery mechanism for falling stonks. not ideal.
+        if (self.price_per_share_in_cents as f64) < self.starting_price as f64 / 10.0 {
+            self.add_condition(StonkCondition::BumpUp, current_tick + 1);
+            self.add_condition(
+                StonkCondition::NoShock(self.shock_probability),
+                current_tick + 1,
+            );
+        }
     }
 
     fn modified_price(&self) -> f64 {
