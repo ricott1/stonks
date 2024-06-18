@@ -68,10 +68,10 @@ impl Market {
                 "Cassius INC".into(),
                 9800,
                 2500,
-                0.005,
+                0.05,
                 0.0025,
                 0.002,
-                0.1,
+                0.01,
             ),
             Market::new_stonk(
                 1,
@@ -79,10 +79,10 @@ impl Market {
                 "Tesla".into(),
                 10000,
                 250,
-                0.0,
+                0.01,
                 0.00025,
                 0.001,
-                0.1,
+                0.01,
             ),
             Market::new_stonk(
                 2,
@@ -93,7 +93,7 @@ impl Market {
                 0.005,
                 0.0005,
                 0.00075,
-                0.1,
+                0.01,
             ),
             Market::new_stonk(
                 3,
@@ -104,7 +104,7 @@ impl Market {
                 0.000,
                 0.00025,
                 0.00075,
-                0.1,
+                0.07,
             ),
             Market::new_stonk(
                 4,
@@ -115,7 +115,7 @@ impl Market {
                 0.000,
                 0.00025,
                 0.001,
-                0.2,
+                0.1,
             ),
             Market::new_stonk(
                 5,
@@ -126,7 +126,7 @@ impl Market {
                 0.000,
                 0.00025,
                 0.001,
-                0.01,
+                0.005,
             ),
             Market::new_stonk(
                 6,
@@ -134,10 +134,10 @@ impl Market {
                 "Yuppies we are".into(),
                 120000,
                 7000,
-                0.000,
+                0.001,
                 0.0025,
                 0.001,
-                0.35,
+                0.15,
             ),
             Market::new_stonk(
                 7,
@@ -145,10 +145,10 @@ impl Market {
                 "Tubbic".into(),
                 12000,
                 10000,
-                0.000,
+                0.001,
                 0.0025,
                 0.001,
-                0.25,
+                0.05,
             ),
         ];
 
@@ -319,8 +319,8 @@ pub struct Stonk {
     pub number_of_shares: u32,
     pub allocated_shares: u32,
     drift: f64,            // Cauchy dist mean, changes the mean price percentage variation
-    drift_volatility: f64, // Influences the rate of change of drift
-    volatility: f64, // Cauchy dist variance, changes the variance of the price percentage variation
+    drift_volatility: f64, // Influences the rate of change of drift, must be positive
+    volatility: f64, // Cauchy dist variance, changes the variance of the price percentage variation, must be positive
     shock_probability: f64, // probability to select the Cauchy dist rather than the Guassian one
     starting_price: u32,
     pub historical_prices: Vec<u32>,
@@ -383,11 +383,11 @@ impl Stonk {
         self.historical_prices.push(self.price_per_share_in_cents);
 
         println!(
-            "{:16}: Median={:+.5} Scale={:.5} price_drift={:+.5} new price={}",
+            "{:15}: μ={:+.5} Δ={:.5} Δprice={:+.5} price={}",
             self.name, self.drift, self.volatility, price_drift, self.price_per_share_in_cents
         );
 
-        self.drift /= 10.0;
+        self.drift /= 2.0;
         if price_drift > 0.0 {
             if self.drift > 0.0 {
                 self.add_condition(StonkCondition::BumpUp, current_tick + 1);

@@ -487,11 +487,6 @@ fn render_stonk(
         .collect();
 
     assert!(x_data.len() == y_data.len());
-    println!(
-        "\n\nCOMPARE {} {}\n\n",
-        (clustering * graph_width),
-        (stonk.historical_prices.len())
-    );
 
     let datas: Vec<(f64, f64)> = x_data
         .iter()
