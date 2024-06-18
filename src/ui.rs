@@ -5,7 +5,7 @@ use crate::stonk::{GamePhase, Market, Stonk, DAY_LENGTH};
 use crate::utils::{img_to_lines, AppResult};
 use crossterm::event::KeyCode;
 use once_cell::sync::Lazy;
-use ratatui::layout::{Constraint, Margin};
+use ratatui::layout::{Constraint, Margin, Rect};
 use ratatui::style::palette::tailwind;
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::symbols;
@@ -352,6 +352,7 @@ fn render_day(
     market: &Market,
     ui_options: UiOptions,
     agent: &UserAgent,
+    area: Rect,
 ) -> AppResult<()> {
     if let Some(stonk_id) = ui_options.focus_on_stonk {
         let stonk = &market.stonks[stonk_id];
@@ -361,7 +362,7 @@ fn render_day(
         let table = build_stonks_table(market, agent, colors);
         frame.render_stateful_widget(
             table,
-            frame.size(),
+            area,
             &mut TableState::default().with_selected(Some(ui_options.selected_stonk_index)),
         );
     }
@@ -373,8 +374,8 @@ fn render_night(
     counter: usize,
     ui_options: UiOptions,
     number_of_players: usize,
+    area: Rect,
 ) -> AppResult<()> {
-    let area = frame.size();
     let total_width = CARD_WIDTH * 3 + 7;
     let side_length = if area.width > total_width {
         (area.width - total_width) / 2
@@ -414,7 +415,7 @@ fn render_night(
     }));
 
     for i in (1..=5).step_by(2) {
-        let card = if ui_options.render_counter <= 3 * STONKS_CARDS.len() {
+        let card = if ui_options.render_counter < 3 * STONKS_CARDS.len() {
             STONKS_CARDS[(ui_options.render_counter / 3) % STONKS_CARDS.len()].clone()
         } else {
             STONKS_CARDS[STONKS_CARDS.len() - 1].clone()
@@ -492,6 +493,11 @@ fn render_stonk(
         .collect();
 
     assert!(x_data.len() == y_data.len());
+    println!(
+        "\n\nCOMPARE {} {}\n\n",
+        (clustering * graph_width),
+        (stonk.historical_prices.len())
+    );
 
     let datas: Vec<(f64, f64)> = x_data
         .iter()
@@ -630,12 +636,25 @@ pub fn render(
     number_of_players: usize,
 ) -> AppResult<()> {
     clear(frame);
+
+    let area = frame.size();
+    let split = Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).split(area);
+
+    frame.render_widget(
+        Paragraph::new(format!(
+            "Day {} {}",
+            market.cycles + 1,
+            market.phase.formatted_time()
+        )),
+        split[0],
+    );
+
     match ui_options.display {
         UiDisplay::Portfolio => {}
         UiDisplay::Stonks => match market.phase {
-            GamePhase::Day { .. } => render_day(frame, market, ui_options, agent)?,
+            GamePhase::Day { .. } => render_day(frame, market, ui_options, agent, split[1])?,
             GamePhase::Night { counter } => {
-                render_night(frame, counter, ui_options, number_of_players)?
+                render_night(frame, counter, ui_options, number_of_players, split[1])?
             }
         },
     }

@@ -5,18 +5,46 @@ use crate::{
 use rand::Rng;
 use rand_distr::{Cauchy, Distribution, Normal};
 
+const DAY_STARTING_HOUR: usize = 6;
+const DAY_LENGTH_HOURS: usize = 16;
+const NIGHT_LENGTH_HOURS: usize = 24 - DAY_LENGTH_HOURS;
+
+// Each second represents 15 minutes => 1 hour = 4 ticks.
+pub const DAY_LENGTH: usize = 4 * DAY_LENGTH_HOURS; // DAY_LENGTH = 16 hours
+pub const NIGHT_LENGTH: usize = 4 * NIGHT_LENGTH_HOURS; // NIGHT_LENGTH = 8 hours
+
+// We keep record of the last 8 weeks
+pub const HISTORICAL_SIZE: usize = DAY_LENGTH * 7 * 8;
+
+const MIN_DRIFT: f64 = -0.01;
+const MAX_DRIFT: f64 = 0.01;
+
 #[derive(Debug, Clone, Copy)]
 pub enum GamePhase {
     Day { counter: usize },
     Night { counter: usize },
 }
 
-pub const DAY_LENGTH: usize = 240;
-pub const NIGHT_LENGTH: usize = 30;
-pub const HISTORICAL_SIZE: usize = DAY_LENGTH * 4;
-
-const MIN_DRIFT: f64 = -0.01;
-const MAX_DRIFT: f64 = 0.01;
+impl GamePhase {
+    pub fn formatted_time(&self) -> String {
+        match self {
+            Self::Day { counter } => {
+                format!(
+                    "{:02}:{:02}",
+                    (DAY_STARTING_HOUR + (DAY_LENGTH - counter) / 4) % 24,
+                    (DAY_LENGTH - counter) % 4 * 15
+                )
+            }
+            Self::Night { counter } => {
+                format!(
+                    "{:02}:{:02}",
+                    (DAY_STARTING_HOUR + DAY_LENGTH_HOURS + (NIGHT_LENGTH - counter) / 4) % 24,
+                    (NIGHT_LENGTH - counter) % 4 * 15
+                )
+            }
+        }
+    }
+}
 
 pub trait StonkMarket {
     fn tick(&mut self);
@@ -203,7 +231,7 @@ impl StonkMarket for Market {
         match self.phase {
             GamePhase::Day { counter } => {
                 self.tick_day();
-                if counter > 0 {
+                if counter > 1 {
                     self.phase = GamePhase::Day {
                         counter: counter - 1,
                     }
@@ -215,7 +243,7 @@ impl StonkMarket for Market {
             }
             GamePhase::Night { counter } => {
                 self.tick_night();
-                if counter > 0 {
+                if counter > 1 {
                     self.phase = GamePhase::Night {
                         counter: counter - 1,
                     };

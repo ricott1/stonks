@@ -19,6 +19,7 @@ use tracing::debug;
 
 const SERVER_SSH_PORT: u16 = 3333;
 const MAX_TIMEOUT_SECONDS: u64 = 1200;
+const MARKET_TICK_INTERVAL_MILLIS: u64 = 1000;
 
 pub fn save_keys(signing_key: &ed25519_dalek::SigningKey) -> AppResult<()> {
     let file = File::create::<&str>("./keys".into())?;
@@ -204,7 +205,7 @@ impl AppServer {
                 }
 
                 if last_market_tick.elapsed().expect("Time flows backwards")
-                    > Duration::from_millis(1000)
+                    > Duration::from_millis(MARKET_TICK_INTERVAL_MILLIS)
                 {
                     market.tick();
                     last_market_tick = SystemTime::now();
