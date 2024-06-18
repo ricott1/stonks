@@ -20,6 +20,7 @@ use tracing::debug;
 const SERVER_SSH_PORT: u16 = 3333;
 const MAX_TIMEOUT_SECONDS: u64 = 1200;
 const MARKET_TICK_INTERVAL_MILLIS: u64 = 1000;
+const RENDER_INTERVAL_MILLIS: u64 = 50;
 
 pub fn save_keys(signing_key: &ed25519_dalek::SigningKey) -> AppResult<()> {
     let file = File::create::<&str>("./keys".into())?;
@@ -171,7 +172,8 @@ impl AppServer {
         tokio::spawn(async move {
             let mut last_market_tick = SystemTime::now();
             loop {
-                tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                tokio::time::sleep(tokio::time::Duration::from_millis(RENDER_INTERVAL_MILLIS))
+                    .await;
 
                 let mut clients = clients.lock().await;
                 let mut market = market.lock().await;
