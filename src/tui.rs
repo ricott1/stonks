@@ -1,6 +1,6 @@
 use crate::agent::UserAgent;
+use crate::market::Market;
 use crate::ssh_backend::SSHBackend;
-use crate::stonk::Market;
 use crate::ui::{render, UiOptions};
 use crate::utils::AppResult;
 use ratatui::Terminal;

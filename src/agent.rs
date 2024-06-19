@@ -1,4 +1,4 @@
-use crate::utils::AppResult;
+use crate::{market::NUMBER_OF_STONKS, utils::AppResult};
 
 const INITIAL_USER_CASH: u32 = 10000;
 
@@ -12,9 +12,9 @@ pub trait DecisionAgent {
     fn cash(&self) -> u32;
     fn add_cash(&mut self, amount: u32) -> AppResult<u32>;
     fn sub_cash(&mut self, amount: u32) -> AppResult<u32>;
-    fn owned_stonks(&self) -> &Vec<u32>;
-    fn add_stonk(&mut self, stonk_id: usize, amount: u32) -> AppResult<&Vec<u32>>;
-    fn sub_stonk(&mut self, stonk_id: usize, amount: u32) -> AppResult<&Vec<u32>>;
+    fn owned_stonks(&self) -> &[u32; NUMBER_OF_STONKS];
+    fn add_stonk(&mut self, stonk_id: usize, amount: u32) -> AppResult<&[u32; NUMBER_OF_STONKS]>;
+    fn sub_stonk(&mut self, stonk_id: usize, amount: u32) -> AppResult<&[u32; NUMBER_OF_STONKS]>;
 
     fn actions(&self) -> &Vec<AgentAction>;
     fn select_action(&mut self, action: AgentAction);
@@ -25,7 +25,7 @@ pub trait DecisionAgent {
 #[derive(Debug, Clone, Default)]
 pub struct UserAgent {
     cash: u32, //in usd cents
-    owned_stonks: Vec<u32>,
+    owned_stonks: [u32; NUMBER_OF_STONKS],
     last_actions: Vec<AgentAction>,
     pending_action: Option<AgentAction>,
 }
@@ -34,7 +34,7 @@ impl UserAgent {
     pub fn new() -> Self {
         Self {
             cash: INITIAL_USER_CASH * 100, // in cents
-            owned_stonks: vec![0].repeat(8),
+            owned_stonks: [0; NUMBER_OF_STONKS],
             ..Default::default()
         }
     }
@@ -61,11 +61,11 @@ impl DecisionAgent for UserAgent {
         Ok(self.cash)
     }
 
-    fn owned_stonks(&self) -> &Vec<u32> {
+    fn owned_stonks(&self) -> &[u32; NUMBER_OF_STONKS] {
         &self.owned_stonks
     }
 
-    fn add_stonk(&mut self, stonk_id: usize, amount: u32) -> AppResult<&Vec<u32>> {
+    fn add_stonk(&mut self, stonk_id: usize, amount: u32) -> AppResult<&[u32; NUMBER_OF_STONKS]> {
         let owned = self.owned_stonks[stonk_id];
         if let Some(new_amount) = owned.checked_add(amount) {
             self.owned_stonks[stonk_id] = new_amount;
@@ -76,7 +76,7 @@ impl DecisionAgent for UserAgent {
         Ok(&self.owned_stonks)
     }
 
-    fn sub_stonk(&mut self, stonk_id: usize, amount: u32) -> AppResult<&Vec<u32>> {
+    fn sub_stonk(&mut self, stonk_id: usize, amount: u32) -> AppResult<&[u32; NUMBER_OF_STONKS]> {
         let owned = self.owned_stonks[stonk_id];
         if let Some(new_amount) = owned.checked_sub(amount) {
             self.owned_stonks[stonk_id] = new_amount;

@@ -1,4 +1,4 @@
-use stonks::{ssh_server::AppServer, stonk::Market, utils::AppResult};
+use stonks::{market::Market, ssh_server::AppServer, utils::AppResult};
 use tracing::{debug, metadata::LevelFilter};
 use tracing_subscriber::EnvFilter;
 

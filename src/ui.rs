@@ -1,7 +1,8 @@
 use std::fmt::{self};
 
 use crate::agent::{DecisionAgent, UserAgent};
-use crate::stonk::{GamePhase, Market, Stonk, DAY_LENGTH, NIGHT_LENGTH};
+use crate::market::{GamePhase, Market, DAY_LENGTH, NIGHT_LENGTH};
+use crate::stonk::Stonk;
 use crate::utils::{img_to_lines, AppResult};
 use crossterm::event::KeyCode;
 use once_cell::sync::Lazy;
@@ -172,9 +173,11 @@ impl UiOptions {
             crossterm::event::KeyCode::Char('z') => self.zoom_level = self.zoom_level.next(),
 
             crossterm::event::KeyCode::Enter | crossterm::event::KeyCode::Backspace => {
-                let idx = self.selected_stonk_index;
-                self.reset();
-                if self.focus_on_stonk.is_none() {
+                if let Some(_) = self.focus_on_stonk {
+                    self.reset();
+                } else {
+                    let idx = self.selected_stonk_index;
+                    self.reset();
                     self.focus_on_stonk = Some(idx);
                 }
             }

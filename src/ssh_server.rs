@@ -1,6 +1,6 @@
 use crate::agent::{AgentAction, DecisionAgent, UserAgent};
+use crate::market::{GamePhase, Market, StonkMarket};
 use crate::ssh_backend::SSHBackend;
-use crate::stonk::{GamePhase, Market, StonkMarket};
 use crate::tui::Tui;
 use crate::ui::UiOptions;
 use crate::utils::AppResult;
