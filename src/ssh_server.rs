@@ -114,8 +114,6 @@ impl Client {
                     } else {
                         1
                     };
-
-                    println!("Buying {}", amount);
                     self.agent
                         .select_action(AgentAction::Buy { stonk_id, amount })
                 }

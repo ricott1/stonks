@@ -171,12 +171,10 @@ impl UiOptions {
 
             crossterm::event::KeyCode::Char('z') => self.zoom_level = self.zoom_level.next(),
 
-            crossterm::event::KeyCode::Enter => {
-                if let Some(_) = self.focus_on_stonk {
-                    self.reset();
-                } else {
-                    let idx = self.selected_stonk_index;
-                    self.reset();
+            crossterm::event::KeyCode::Enter | crossterm::event::KeyCode::Backspace => {
+                let idx = self.selected_stonk_index;
+                self.reset();
+                if self.focus_on_stonk.is_none() {
                     self.focus_on_stonk = Some(idx);
                 }
             }
