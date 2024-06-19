@@ -40,12 +40,12 @@ impl Tui {
     pub fn draw(
         &mut self,
         market: &Market,
-        ui_options: &UiOptions,
         agent: &UserAgent,
+        ui_options: &UiOptions,
         number_of_players: usize,
     ) -> AppResult<()> {
         self.terminal.draw(|frame| {
-            render(frame, market, ui_options, agent, number_of_players).expect("Failed rendering")
+            render(frame, market, agent, ui_options, number_of_players).expect("Failed rendering")
         })?;
         Ok(())
     }

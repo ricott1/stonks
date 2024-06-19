@@ -1,5 +1,5 @@
 use crate::{
-    agent::{AgentAction, DecisionAgent},
+    agent::{DayAction, DecisionAgent},
     stonk::{Stonk, StonkClass, StonkCondition},
     utils::AppResult,
 };
@@ -110,7 +110,7 @@ impl Market {
                 4,
                 StonkClass::War,
                 "Mariottide".into(),
-                80000,
+                60000,
                 1000,
                 0.000,
                 0.00025,
@@ -132,11 +132,11 @@ impl Market {
                 6,
                 StonkClass::Commodity,
                 "Yuppies we are".into(),
-                120000,
+                80000,
                 7000,
                 0.001,
-                0.0025,
                 0.001,
+                0.0009,
                 0.15,
             ),
             Market::new_stonk(
@@ -255,9 +255,9 @@ impl StonkMarket for Market {
 
     fn apply_agent_action<A: DecisionAgent>(&mut self, agent: &mut A) -> AppResult<()> {
         match self.phase {
-            GamePhase::Day { .. } => match agent.selected_action() {
+            GamePhase::Day { .. } => match agent.selected_day_action() {
                 Some(action) => match action {
-                    AgentAction::Buy { stonk_id, amount } => {
+                    DayAction::Buy { stonk_id, amount } => {
                         let stonk = &mut self.stonks[stonk_id];
                         if stonk.number_of_shares == stonk.allocated_shares {
                             return Err("No more shares available".into());
@@ -265,28 +265,28 @@ impl StonkMarket for Market {
                         let cost = stonk.buy_price() * amount;
                         agent.sub_cash(cost)?;
                         agent.add_stonk(stonk_id, amount)?;
-                        stonk.allocated_shares += 1;
+                        stonk.allocated_shares += amount;
                         stonk.add_condition(StonkCondition::BumpUp, self.last_tick + 1);
                     }
-                    AgentAction::Sell { stonk_id, amount } => {
+                    DayAction::Sell { stonk_id, amount } => {
                         let stonk = &mut self.stonks[stonk_id];
                         let cost = stonk.sell_price() * amount;
                         agent.sub_stonk(stonk_id, amount)?;
                         agent.add_cash(cost)?;
-                        stonk.allocated_shares -= 1;
+                        stonk.allocated_shares -= amount;
                         stonk.add_condition(StonkCondition::BumpDown, self.last_tick + 1);
                     }
                 },
                 None => {}
             },
             GamePhase::Night { .. } => {
-                if agent.selected_action().is_some() {
+                if agent.selected_day_action().is_some() {
                     return Err("No actions allowed during night".into());
                 }
             }
         }
 
-        agent.clear_action();
+        agent.clear_day_action();
 
         Ok(())
     }

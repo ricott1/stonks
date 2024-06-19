@@ -5,7 +5,7 @@ use tracing_subscriber::EnvFilter;
 #[tokio::main]
 async fn main() -> AppResult<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::default().add_directive(LevelFilter::OFF.into()))
+        .with_env_filter(EnvFilter::default().add_directive(LevelFilter::DEBUG.into()))
         .with_line_number(true)
         .with_file(true)
         .init();

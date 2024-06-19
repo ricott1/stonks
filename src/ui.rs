@@ -1,7 +1,7 @@
 use std::fmt::{self};
 
 use crate::agent::{DecisionAgent, UserAgent};
-use crate::market::{GamePhase, Market, DAY_LENGTH, NIGHT_LENGTH};
+use crate::market::{GamePhase, Market, DAY_LENGTH, HISTORICAL_SIZE, NIGHT_LENGTH};
 use crate::stonk::Stonk;
 use crate::utils::{img_to_lines, AppResult};
 use crossterm::event::KeyCode;
@@ -88,6 +88,7 @@ pub enum ZoomLevel {
     Short,
     Medium,
     Long,
+    Max,
 }
 
 impl fmt::Display for ZoomLevel {
@@ -96,6 +97,7 @@ impl fmt::Display for ZoomLevel {
             ZoomLevel::Short => write!(f, "Short"),
             ZoomLevel::Medium => write!(f, "Medium"),
             ZoomLevel::Long => write!(f, "Long"),
+            ZoomLevel::Max => write!(f, "Max"),
         }
     }
 }
@@ -105,7 +107,8 @@ impl ZoomLevel {
         match self {
             Self::Short => Self::Medium,
             Self::Medium => Self::Long,
-            Self::Long => Self::Short,
+            Self::Long => Self::Max,
+            Self::Max => Self::Short,
         }
     }
 }
@@ -136,7 +139,7 @@ impl UiOptions {
         }
     }
 
-    pub fn handle_key_events(&mut self, key_code: KeyCode) -> AppResult<()> {
+    pub fn handle_key_events(&mut self, key_code: KeyCode, market: &Market) -> AppResult<()> {
         match key_code {
             crossterm::event::KeyCode::Down => {
                 if let Some(index) = self.focus_on_stonk {
@@ -173,12 +176,17 @@ impl UiOptions {
             crossterm::event::KeyCode::Char('z') => self.zoom_level = self.zoom_level.next(),
 
             crossterm::event::KeyCode::Enter | crossterm::event::KeyCode::Backspace => {
-                if let Some(_) = self.focus_on_stonk {
-                    self.reset();
-                } else {
-                    let idx = self.selected_stonk_index;
-                    self.reset();
-                    self.focus_on_stonk = Some(idx);
+                match market.phase {
+                    GamePhase::Day { .. } => {
+                        if let Some(_) = self.focus_on_stonk {
+                            self.reset();
+                        } else {
+                            let idx = self.selected_stonk_index;
+                            self.reset();
+                            self.focus_on_stonk = Some(idx);
+                        }
+                    }
+                    GamePhase::Night { .. } => {}
                 }
             }
 
@@ -367,13 +375,13 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
 fn render_day(
     frame: &mut Frame,
     market: &Market,
-    ui_options: &UiOptions,
     agent: &UserAgent,
+    ui_options: &UiOptions,
     area: Rect,
 ) -> AppResult<()> {
     if let Some(stonk_id) = ui_options.focus_on_stonk {
         let stonk = &market.stonks[stonk_id];
-        render_stonk(frame, market, ui_options, stonk, area)?;
+        render_stonk(frame, market, agent, ui_options, stonk, area)?;
     } else {
         let colors = TableColors::new(&PALETTES[ui_options.palette_index]);
         let table = build_stonks_table(market, agent, colors);
@@ -479,6 +487,7 @@ fn render_night(
 fn render_stonk(
     frame: &mut Frame,
     market: &Market,
+    agent: &UserAgent,
     ui_options: &UiOptions,
     stonk: &Stonk,
     area: Rect,
@@ -502,15 +511,15 @@ fn render_stonk(
         Style::default().light_magenta(),
     ];
 
+    let graph_width = area.width as usize - 5;
+
     let clustering = match ui_options.zoom_level {
         ZoomLevel::Short => 1,
         ZoomLevel::Medium => 4,
         ZoomLevel::Long => 16,
+        ZoomLevel::Max => HISTORICAL_SIZE / graph_width,
     };
 
-    // let x_ticks = (min_tick..market.last_tick).map(|t| t as f64).collect();
-
-    let graph_width = area.width as usize - 5;
     let x_data: Vec<f64> = (0..market.last_tick)
         .rev()
         .take((clustering * graph_width).min(stonk.historical_prices.len()))
@@ -626,19 +635,28 @@ fn render_stonk(
     frame.render_widget(
         Paragraph::new(format!(
             "{:24} {:24}",
-            format!("`b`: buy x1   (${:.2})", stonk.formatted_buy_price()),
-            format!("`B`: buy x10  (${:.2})", 10.0 * stonk.formatted_buy_price()),
+            format!("`b`: buy x1    (${:.2})", stonk.formatted_buy_price()),
+            format!(
+                "`B`: buy x100  (${:.2})",
+                10.0 * stonk.formatted_buy_price()
+            ),
         )),
         split[2],
     );
 
+    let owned_amount = agent.owned_stonks()[stonk.id];
     frame.render_widget(
         Paragraph::new(format!(
-            "{:24} {:24}",
-            format!("`s`: sell x1  (${:.2})", stonk.formatted_sell_price()),
+            "{:24} {:24} {:24}",
+            format!("`s`: sell x1   (${:.2})", stonk.formatted_sell_price()),
             format!(
-                "`S`: sell x10 (${:.2})",
+                "`S`: sell x100 (${:.2})",
                 10.0 * stonk.formatted_sell_price()
+            ),
+            format!(
+                "`d`: sell x{} (${:.2})",
+                owned_amount,
+                owned_amount as f64 * stonk.formatted_sell_price()
             ),
         )),
         split[3],
@@ -660,8 +678,8 @@ fn clear(frame: &mut Frame) {
 pub fn render(
     frame: &mut Frame,
     market: &Market,
-    ui_options: &UiOptions,
     agent: &UserAgent,
+    ui_options: &UiOptions,
     number_of_players: usize,
 ) -> AppResult<()> {
     clear(frame);
@@ -669,28 +687,30 @@ pub fn render(
     let area = frame.size();
     let split = Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).split(area);
 
-    let share_amount_string = if let Some(stonk_id) = ui_options.focus_on_stonk {
+    let extra_text = if let Some(stonk_id) = ui_options.focus_on_stonk {
         let amount = agent.owned_stonks()[stonk_id];
         let stonk = &market.stonks[stonk_id];
         format!(
-            "{} ({:.03}%) ",
+            "Owned shares {} ({:.03}%) ",
             amount,
             (amount as f64 / stonk.number_of_shares as f64)
         )
     } else {
-        "".to_string()
+        format!(
+            "{} player{} online - `ssh {}@frittura.org -p 3333`",
+            number_of_players,
+            if number_of_players > 1 { "s" } else { "" },
+            ui_options.user_id
+        )
     };
 
     frame.render_widget(
         Paragraph::new(format!(
-            "Day {} {} - Cash: ${:.2} {}- {} player{} online - `ssh {}@frittura.org -p 3333`",
+            "Day {:<5} {} - Cash: ${:<6.2} - {}",
             market.cycles + 1,
             market.phase.formatted_time(),
             agent.formatted_cash(),
-            share_amount_string,
-            number_of_players,
-            if number_of_players > 1 { "s" } else { "" },
-            ui_options.user_id
+            extra_text,
         )),
         split[0],
     );
@@ -698,7 +718,7 @@ pub fn render(
     match ui_options.display {
         UiDisplay::Portfolio => {}
         UiDisplay::Stonks => match market.phase {
-            GamePhase::Day { .. } => render_day(frame, market, ui_options, agent, split[1])?,
+            GamePhase::Day { .. } => render_day(frame, market, agent, ui_options, split[1])?,
             GamePhase::Night { counter } => render_night(frame, counter, ui_options, split[1])?,
         },
     }

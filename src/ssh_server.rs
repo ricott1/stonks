@@ -1,4 +1,4 @@
-use crate::agent::{AgentAction, DecisionAgent, UserAgent};
+use crate::agent::{DayAction, DecisionAgent, UserAgent};
 use crate::market::{GamePhase, Market, StonkMarket};
 use crate::ssh_backend::SSHBackend;
 use crate::tui::Tui;
@@ -104,35 +104,42 @@ struct Client {
 }
 
 impl Client {
-    pub fn handle_key_events(&mut self, key_event: KeyEvent, _market: &Market) -> AppResult<()> {
-        self.last_action = SystemTime::now();
+    pub fn handle_key_events(&mut self, key_event: KeyEvent, market: &Market) -> AppResult<()> {
         match key_event.code {
             KeyCode::Char('b') => {
                 if let Some(stonk_id) = self.ui_options.focus_on_stonk {
                     let amount = if key_event.modifiers == KeyModifiers::SHIFT {
-                        10
+                        100
                     } else {
                         1
                     };
                     self.agent
-                        .select_action(AgentAction::Buy { stonk_id, amount })
+                        .select_day_action(DayAction::Buy { stonk_id, amount })
                 }
             }
 
             KeyCode::Char('s') => {
                 if let Some(stonk_id) = self.ui_options.focus_on_stonk {
                     let amount = if key_event.modifiers == KeyModifiers::SHIFT {
-                        10
+                        100
                     } else {
                         1
                     };
                     self.agent
-                        .select_action(AgentAction::Sell { stonk_id, amount })
+                        .select_day_action(DayAction::Sell { stonk_id, amount })
+                }
+            }
+
+            KeyCode::Char('d') => {
+                if let Some(stonk_id) = self.ui_options.focus_on_stonk {
+                    let amount = self.agent.owned_stonks()[stonk_id];
+                    self.agent
+                        .select_day_action(DayAction::Sell { stonk_id, amount })
                 }
             }
 
             key_code => {
-                self.ui_options.handle_key_events(key_code)?;
+                self.ui_options.handle_key_events(key_code, market)?;
             }
         }
         Ok(())
@@ -199,17 +206,12 @@ impl AppServer {
                 let number_of_players = clients.len();
 
                 for (id, client) in clients.iter_mut() {
-                    if client.agent.selected_action().is_some() {
+                    if client.agent.selected_day_action().is_some() {
                         market
                             .apply_agent_action::<UserAgent>(&mut client.agent)
                             .unwrap_or_else(|e| {
                                 error!("Could not apply agent {} action: {}", id, e)
                             });
-
-                        persisted_agents.insert(
-                            client.ui_options.user_id.clone(),
-                            (SystemTime::now(), client.agent.clone()),
-                        );
                     }
                 }
 
@@ -226,8 +228,8 @@ impl AppServer {
                         .tui
                         .draw(
                             &market,
-                            &client.ui_options,
                             &client.agent,
+                            &client.ui_options,
                             number_of_players,
                         )
                         .unwrap_or_else(|e| debug!("Failed to draw: {}", e));
@@ -388,6 +390,14 @@ impl Handler for AppServer {
                     }
                     _ => {
                         let market = self.market.lock().await;
+                        let mut persisted_agents = self.persisted_agents.lock().await;
+
+                        let now = SystemTime::now();
+                        persisted_agents.insert(
+                            client.ui_options.user_id.clone(),
+                            (now, client.agent.clone()),
+                        );
+                        client.last_action = now;
                         client
                             .handle_key_events(key_event, &market)
                             .map_err(|e| anyhow::anyhow!("Error: {}", e))?;
@@ -395,8 +405,8 @@ impl Handler for AppServer {
                             .tui
                             .draw(
                                 &market,
-                                &client.ui_options,
                                 &client.agent,
+                                &client.ui_options,
                                 number_of_players,
                             )
                             .unwrap_or_else(|e| error!("Failed to draw: {}", e));

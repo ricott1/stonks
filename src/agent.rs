@@ -3,7 +3,7 @@ use crate::{market::NUMBER_OF_STONKS, utils::AppResult};
 const INITIAL_USER_CASH: u32 = 10000;
 
 #[derive(Debug, Clone, Copy)]
-pub enum AgentAction {
+pub enum DayAction {
     Buy { stonk_id: usize, amount: u32 },
     Sell { stonk_id: usize, amount: u32 },
 }
@@ -16,18 +16,17 @@ pub trait DecisionAgent {
     fn add_stonk(&mut self, stonk_id: usize, amount: u32) -> AppResult<&[u32; NUMBER_OF_STONKS]>;
     fn sub_stonk(&mut self, stonk_id: usize, amount: u32) -> AppResult<&[u32; NUMBER_OF_STONKS]>;
 
-    fn actions(&self) -> &Vec<AgentAction>;
-    fn select_action(&mut self, action: AgentAction);
-    fn selected_action(&mut self) -> Option<AgentAction>;
-    fn clear_action(&mut self);
+    fn select_day_action(&mut self, action: DayAction);
+    fn selected_day_action(&mut self) -> Option<DayAction>;
+    fn clear_day_action(&mut self);
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct UserAgent {
     cash: u32, //in usd cents
     owned_stonks: [u32; NUMBER_OF_STONKS],
-    last_actions: Vec<AgentAction>,
-    pending_action: Option<AgentAction>,
+    last_actions: Vec<DayAction>,
+    pending_action: Option<DayAction>,
 }
 
 impl UserAgent {
@@ -86,19 +85,15 @@ impl DecisionAgent for UserAgent {
         Ok(&self.owned_stonks)
     }
 
-    fn actions(&self) -> &Vec<AgentAction> {
-        &self.last_actions
-    }
-
-    fn select_action(&mut self, action: AgentAction) {
+    fn select_day_action(&mut self, action: DayAction) {
         self.pending_action = Some(action);
     }
 
-    fn selected_action(&mut self) -> Option<AgentAction> {
+    fn selected_day_action(&mut self) -> Option<DayAction> {
         self.pending_action
     }
 
-    fn clear_action(&mut self) {
+    fn clear_day_action(&mut self) {
         if let Some(act) = self.pending_action {
             self.last_actions.push(act);
         }
