@@ -206,13 +206,9 @@ impl AppServer {
                 let number_of_players = clients.len();
 
                 for (id, client) in clients.iter_mut() {
-                    if client.agent.selected_day_action().is_some() {
-                        market
-                            .apply_agent_action::<UserAgent>(&mut client.agent)
-                            .unwrap_or_else(|e| {
-                                error!("Could not apply agent {} action: {}", id, e)
-                            });
-                    }
+                    market
+                        .apply_agent_action::<UserAgent>(&mut client.agent)
+                        .unwrap_or_else(|e| error!("Could not apply agent {} action: {}", id, e));
                 }
 
                 for (_, client) in clients.iter_mut() {

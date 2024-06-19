@@ -7,15 +7,15 @@ use rand::Rng;
 use tracing::debug;
 
 const DAY_STARTING_HOUR: usize = 6;
-const DAY_LENGTH_HOURS: usize = 16;
+const DAY_LENGTH_HOURS: usize = 2;
 const NIGHT_LENGTH_HOURS: usize = 24 - DAY_LENGTH_HOURS;
 
 // Each second represents 15 minutes => 1 hour = 4 ticks.
 pub const DAY_LENGTH: usize = 4 * DAY_LENGTH_HOURS; // DAY_LENGTH = 16 hours
 pub const NIGHT_LENGTH: usize = 4 * NIGHT_LENGTH_HOURS; // NIGHT_LENGTH = 8 hours
 
-// We keep record of the last 8 weeks
-pub const HISTORICAL_SIZE: usize = DAY_LENGTH * 7 * 8;
+// We keep record of the last 12 weeks
+pub const HISTORICAL_SIZE: usize = DAY_LENGTH * 7 * 12;
 
 pub const NUMBER_OF_STONKS: usize = 8;
 
@@ -146,8 +146,8 @@ impl Market {
                 12000,
                 10000,
                 0.001,
-                0.0025,
-                0.001,
+                0.0005,
+                0.01,
                 0.05,
             ),
         ];
@@ -254,9 +254,10 @@ impl StonkMarket for Market {
     }
 
     fn apply_agent_action<A: DecisionAgent>(&mut self, agent: &mut A) -> AppResult<()> {
-        match self.phase {
-            GamePhase::Day { .. } => match agent.selected_day_action() {
-                Some(action) => match action {
+        if let Some(action) = agent.selected_day_action() {
+            agent.clear_day_action();
+            match self.phase {
+                GamePhase::Day { .. } => match action {
                     DayAction::Buy { stonk_id, amount } => {
                         let stonk = &mut self.stonks[stonk_id];
                         if stonk.number_of_shares == stonk.allocated_shares {
@@ -277,16 +278,13 @@ impl StonkMarket for Market {
                         stonk.add_condition(StonkCondition::BumpDown, self.last_tick + 1);
                     }
                 },
-                None => {}
-            },
-            GamePhase::Night { .. } => {
-                if agent.selected_day_action().is_some() {
-                    return Err("No actions allowed during night".into());
+                GamePhase::Night { .. } => {
+                    if agent.selected_day_action().is_some() {
+                        return Err("No actions allowed during night".into());
+                    }
                 }
             }
         }
-
-        agent.clear_day_action();
 
         Ok(())
     }

@@ -12,7 +12,7 @@ use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::symbols;
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{
-    Axis, Block, Cell, Chart, Dataset, GraphType, HighlightSpacing, Paragraph, Row, Table,
+    Axis, Block, Borders, Cell, Chart, Dataset, GraphType, HighlightSpacing, Paragraph, Row, Table,
     TableState,
 };
 use ratatui::{layout::Layout, Frame};
@@ -400,7 +400,7 @@ fn render_night(
     ui_options: &UiOptions,
     area: Rect,
 ) -> AppResult<()> {
-    let total_width = CARD_WIDTH * 3 + 7;
+    let total_width = CARD_WIDTH * 3 + 18;
     let side_length = if area.width > total_width {
         (area.width - total_width) / 2
     } else {
@@ -425,16 +425,11 @@ fn render_night(
     }));
 
     let cards_split = Layout::horizontal([
-        Constraint::Min(0),
         Constraint::Length(CARD_WIDTH + 4),
         Constraint::Length(CARD_WIDTH + 4),
         Constraint::Length(CARD_WIDTH + 4),
-        Constraint::Min(0),
     ])
-    .split(v_split[0].inner(&Margin {
-        horizontal: 1,
-        vertical: 0,
-    }));
+    .split(v_split[0]);
 
     for i in 0..3 {
         // If there is not more than half of the time still available, skip the animation
@@ -443,8 +438,8 @@ fn render_night(
                 Paragraph::new(
                     STONKS_CARDS[(ui_options.render_counter / 3) % STONKS_CARDS.len()].clone(),
                 ),
-                cards_split[i + 1].inner(&Margin {
-                    horizontal: 1,
+                cards_split[i].inner(&Margin {
+                    horizontal: 2,
                     vertical: 1,
                 }),
             );
@@ -455,21 +450,30 @@ fn render_night(
                 frame.render_widget(
                     Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone())
                         .block(Block::bordered().border_style(Style::default().red().on_red())),
-                    cards_split[i + 1],
+                    cards_split[i].inner(&Margin {
+                        horizontal: 1,
+                        vertical: 0,
+                    }),
+                );
+                frame.render_widget(
+                    Block::bordered()
+                        .border_style(Style::default().red().on_red())
+                        .borders(Borders::RIGHT | Borders::LEFT),
+                    cards_split[i],
                 );
             } else {
                 frame.render_widget(
                     Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone()),
-                    cards_split[i + 1].inner(&Margin {
-                        horizontal: 1,
+                    cards_split[i].inner(&Margin {
+                        horizontal: 2,
                         vertical: 1,
                     }),
                 );
             }
             frame.render_widget(
                 Paragraph::new(format!("TEST {i}").bold().black()).centered(),
-                cards_split[i + 1].inner(&Margin {
-                    horizontal: 3,
+                cards_split[i].inner(&Margin {
+                    horizontal: 4,
                     vertical: 4,
                 }),
             );
@@ -635,9 +639,9 @@ fn render_stonk(
     frame.render_widget(
         Paragraph::new(format!(
             "{:24} {:24}",
-            format!("`b`: buy x1    (${:.2})", stonk.formatted_buy_price()),
+            format!("`b`: buy  x1 (${:.2})", stonk.formatted_buy_price()),
             format!(
-                "`B`: buy x100  (${:.2})",
+                "`B`: buy  x100 (${:.2})",
                 10.0 * stonk.formatted_buy_price()
             ),
         )),
@@ -648,7 +652,7 @@ fn render_stonk(
     frame.render_widget(
         Paragraph::new(format!(
             "{:24} {:24} {:24}",
-            format!("`s`: sell x1   (${:.2})", stonk.formatted_sell_price()),
+            format!("`s`: sell x1 (${:.2})", stonk.formatted_sell_price()),
             format!(
                 "`S`: sell x100 (${:.2})",
                 10.0 * stonk.formatted_sell_price()
