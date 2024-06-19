@@ -5,7 +5,7 @@ use tracing::debug;
 const MIN_DRIFT: f64 = -0.2;
 const MAX_DRIFT: f64 = -MIN_DRIFT;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum StonkClass {
     Media,
     War,
@@ -15,9 +15,7 @@ pub enum StonkClass {
 
 #[derive(Debug, Clone, Copy)]
 pub enum StonkCondition {
-    BumpUp,
-    BumpDown,
-    GlobalDrift(f64),
+    Bump(f64),
     NoShock(f64),
 }
 
@@ -74,9 +72,7 @@ impl Stonk {
     pub fn apply_conditions(&mut self, current_tick: usize) {
         for (until_tick, condition) in self.conditions.iter() {
             match condition {
-                StonkCondition::BumpUp => self.drift += self.drift_volatility,
-                StonkCondition::BumpDown => self.drift -= self.drift_volatility,
-                StonkCondition::GlobalDrift(drift) => self.drift += drift * self.drift_volatility,
+                StonkCondition::Bump(amount) => self.drift += amount * self.drift_volatility,
                 StonkCondition::NoShock(previous_shock_probability) => {
                     if *until_tick > current_tick {
                         self.shock_probability = 0.0
@@ -134,15 +130,15 @@ impl Stonk {
         self.drift /= 2.0;
         if price_drift > 0.0 {
             if self.drift > 0.0 {
-                self.add_condition(StonkCondition::BumpUp, current_tick + 1);
+                self.add_condition(StonkCondition::Bump(0.01), current_tick + 1);
             } else {
-                self.add_condition(StonkCondition::BumpUp, current_tick + 3);
+                self.add_condition(StonkCondition::Bump(0.025), current_tick + 3);
             }
         } else if price_drift < 0.0 {
             if self.drift > 0.0 {
-                self.add_condition(StonkCondition::BumpDown, current_tick + 3);
+                self.add_condition(StonkCondition::Bump(-0.01), current_tick + 3);
             } else {
-                self.add_condition(StonkCondition::BumpDown, current_tick + 1);
+                self.add_condition(StonkCondition::Bump(-0.025), current_tick + 1);
             }
         }
 
@@ -150,13 +146,13 @@ impl Stonk {
 
         // Add recovery mechanism for falling stonks. not ideal.
         if (self.price_per_share_in_cents as f64) < self.starting_price as f64 / 8.0 {
-            self.add_condition(StonkCondition::BumpUp, current_tick + 1);
+            self.add_condition(StonkCondition::Bump(0.25), current_tick + 1);
             self.add_condition(
                 StonkCondition::NoShock(self.shock_probability),
                 current_tick + 1,
             );
         } else if (self.price_per_share_in_cents as f64) > self.starting_price as f64 * 16.0 {
-            self.add_condition(StonkCondition::BumpDown, current_tick + 1);
+            self.add_condition(StonkCondition::Bump(-0.25), current_tick + 1);
             self.add_condition(
                 StonkCondition::NoShock(self.shock_probability),
                 current_tick + 1,

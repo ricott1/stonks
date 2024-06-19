@@ -1,11 +1,66 @@
-use crate::{market::NUMBER_OF_STONKS, utils::AppResult};
+use std::fmt::Display;
+use strum_macros::EnumIter;
+
+use crate::{market::NUMBER_OF_STONKS, stonk::StonkClass, utils::AppResult};
 
 const INITIAL_USER_CASH: u32 = 10000;
 
 #[derive(Debug, Clone, Copy)]
-pub enum DayAction {
+pub enum AgentAction {
     Buy { stonk_id: usize, amount: u32 },
     Sell { stonk_id: usize, amount: u32 },
+    BumpStonkClass { class: StonkClass },
+}
+
+#[derive(Debug, Clone, Copy, EnumIter)]
+pub enum NightEvent {
+    War,
+    ColdWinter,
+}
+
+impl Display for NightEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::War => write!(f, "War"),
+            Self::ColdWinter => write!(f, "Cold winter"),
+        }
+    }
+}
+
+impl NightEvent {
+    pub fn description(&self) -> Vec<&str> {
+        match self {
+            Self::War => vec![
+                "It's war time!",
+                "Chance for all war stonks",
+                "to get a big bump.",
+            ],
+            Self::ColdWinter => vec![
+                "Apparently next winter",
+                "is gonna be very cold,",
+                "better prepare soon. So",
+                "much for global warming!",
+            ],
+        }
+    }
+
+    pub fn condition(&self) -> Box<dyn Fn(&dyn DecisionAgent) -> bool> {
+        match self {
+            Self::War => Box::new(|agent| agent.cash() > 10),
+            Self::ColdWinter => Box::new(|agent| agent.cash() > 10),
+        }
+    }
+
+    pub fn action(&self) -> Option<AgentAction> {
+        match self {
+            Self::War => Some(AgentAction::BumpStonkClass {
+                class: StonkClass::War,
+            }),
+            Self::ColdWinter => Some(AgentAction::BumpStonkClass {
+                class: StonkClass::Commodity,
+            }),
+        }
+    }
 }
 
 pub trait DecisionAgent {
@@ -16,17 +71,20 @@ pub trait DecisionAgent {
     fn add_stonk(&mut self, stonk_id: usize, amount: u32) -> AppResult<&[u32; NUMBER_OF_STONKS]>;
     fn sub_stonk(&mut self, stonk_id: usize, amount: u32) -> AppResult<&[u32; NUMBER_OF_STONKS]>;
 
-    fn select_day_action(&mut self, action: DayAction);
-    fn selected_day_action(&mut self) -> Option<DayAction>;
-    fn clear_day_action(&mut self);
+    fn select_action(&mut self, action: AgentAction);
+    fn selected_action(&self) -> Option<AgentAction>;
+    fn clear_action(&mut self);
+
+    fn set_available_night_events(&mut self, actions: Vec<NightEvent>);
+    fn available_night_events(&self) -> &Vec<NightEvent>;
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct UserAgent {
     cash: u32, //in usd cents
     owned_stonks: [u32; NUMBER_OF_STONKS],
-    last_actions: Vec<DayAction>,
-    pending_action: Option<DayAction>,
+    pending_action: Option<AgentAction>,
+    available_night_events: Vec<NightEvent>,
 }
 
 impl UserAgent {
@@ -85,18 +143,23 @@ impl DecisionAgent for UserAgent {
         Ok(&self.owned_stonks)
     }
 
-    fn select_day_action(&mut self, action: DayAction) {
+    fn select_action(&mut self, action: AgentAction) {
         self.pending_action = Some(action);
     }
 
-    fn selected_day_action(&mut self) -> Option<DayAction> {
+    fn selected_action(&self) -> Option<AgentAction> {
         self.pending_action
     }
 
-    fn clear_day_action(&mut self) {
-        if let Some(act) = self.pending_action {
-            self.last_actions.push(act);
-        }
+    fn clear_action(&mut self) {
         self.pending_action = None;
+    }
+
+    fn set_available_night_events(&mut self, events: Vec<NightEvent>) {
+        self.available_night_events = events;
+    }
+
+    fn available_night_events(&self) -> &Vec<NightEvent> {
+        &self.available_night_events
     }
 }

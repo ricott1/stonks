@@ -1,11 +1,12 @@
-use crate::agent::{DayAction, DecisionAgent, UserAgent};
-use crate::market::{GamePhase, Market, StonkMarket};
+use crate::agent::{AgentAction, DecisionAgent, NightEvent, UserAgent};
+use crate::market::{GamePhase, Market, StonkMarket, MAX_EVENTS_PER_NIGHT};
 use crate::ssh_backend::SSHBackend;
 use crate::tui::Tui;
 use crate::ui::UiOptions;
 use crate::utils::AppResult;
 use async_trait::async_trait;
 use crossterm::event::*;
+use rand::seq::SliceRandom;
 use rand::Rng;
 use rand_distr::Alphanumeric;
 use russh::{server::*, Channel, ChannelId, CryptoVec, Disconnect, Pty};
@@ -16,6 +17,7 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
+use strum::IntoEnumIterator;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info};
 
@@ -106,6 +108,28 @@ struct Client {
 impl Client {
     pub fn handle_key_events(&mut self, key_event: KeyEvent, market: &Market) -> AppResult<()> {
         match key_event.code {
+            crossterm::event::KeyCode::Enter | crossterm::event::KeyCode::Backspace => match market
+                .phase
+            {
+                GamePhase::Day { .. } => {
+                    if let Some(_) = self.ui_options.focus_on_stonk {
+                        self.ui_options.reset();
+                    } else {
+                        self.ui_options.select_stonk();
+                    }
+                }
+                GamePhase::Night { .. } => {
+                    if let Some(idx) = self.ui_options.selected_event_card {
+                        if idx < self.agent.available_night_events().len() {
+                            if let Some(action) = self.agent.available_night_events()[idx].action()
+                            {
+                                self.agent.select_action(action);
+                            }
+                        }
+                    }
+                }
+            },
+
             KeyCode::Char('b') => {
                 if let Some(stonk_id) = self.ui_options.focus_on_stonk {
                     let amount = if key_event.modifiers == KeyModifiers::SHIFT {
@@ -114,7 +138,7 @@ impl Client {
                         1
                     };
                     self.agent
-                        .select_day_action(DayAction::Buy { stonk_id, amount })
+                        .select_action(AgentAction::Buy { stonk_id, amount })
                 }
             }
 
@@ -126,7 +150,7 @@ impl Client {
                         1
                     };
                     self.agent
-                        .select_day_action(DayAction::Sell { stonk_id, amount })
+                        .select_action(AgentAction::Sell { stonk_id, amount })
                 }
             }
 
@@ -134,12 +158,12 @@ impl Client {
                 if let Some(stonk_id) = self.ui_options.focus_on_stonk {
                     let amount = self.agent.owned_stonks()[stonk_id];
                     self.agent
-                        .select_day_action(DayAction::Sell { stonk_id, amount })
+                        .select_action(AgentAction::Sell { stonk_id, amount })
                 }
             }
 
             key_code => {
-                self.ui_options.handle_key_events(key_code, market)?;
+                self.ui_options.handle_key_events(key_code, &self.agent)?;
             }
         }
         Ok(())
@@ -206,20 +230,40 @@ impl AppServer {
                 let number_of_players = clients.len();
 
                 for (id, client) in clients.iter_mut() {
-                    market
-                        .apply_agent_action::<UserAgent>(&mut client.agent)
-                        .unwrap_or_else(|e| error!("Could not apply agent {} action: {}", id, e));
-                }
-
-                for (_, client) in clients.iter_mut() {
                     match market.phase {
                         GamePhase::Day { .. } => {
                             client.ui_options.render_counter = 0;
                             client.ui_options.selected_event_card = None;
+                            market
+                                .apply_agent_action::<UserAgent>(&mut client.agent)
+                                .unwrap_or_else(|e| {
+                                    error!("Could not apply agent {} action: {}", id, e)
+                                });
                         }
-                        GamePhase::Night { .. } => client.ui_options.render_counter += 1,
+                        GamePhase::Night { .. } => {
+                            // At the beginning of the night, set the available events.
+                            // We set them here because we need the market data.
+                            if client.ui_options.render_counter == 0 {
+                                let mut events = NightEvent::iter()
+                                    .filter(|e| e.condition()(&client.agent))
+                                    .collect::<Vec<NightEvent>>();
+                                events.shuffle(&mut rand::thread_rng());
+                                events = events
+                                    .iter()
+                                    .take(MAX_EVENTS_PER_NIGHT)
+                                    .map(|e| *e)
+                                    .collect::<Vec<NightEvent>>();
+                                if events.len() > 0 {
+                                    client.ui_options.selected_event_card = Some(0);
+                                }
+                                client.agent.set_available_night_events(events);
+                            }
+                            client.ui_options.render_counter += 1;
+                        }
                     }
+                }
 
+                for (_, client) in clients.iter_mut() {
                     client
                         .tui
                         .draw(

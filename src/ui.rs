@@ -139,7 +139,8 @@ impl UiOptions {
         }
     }
 
-    pub fn handle_key_events(&mut self, key_code: KeyCode, market: &Market) -> AppResult<()> {
+    pub fn handle_key_events(&mut self, key_code: KeyCode, agent: &UserAgent) -> AppResult<()> {
+        let num_night_events = agent.available_night_events().len();
         match key_code {
             crossterm::event::KeyCode::Down => {
                 if let Some(index) = self.focus_on_stonk {
@@ -158,37 +159,27 @@ impl UiOptions {
             }
 
             crossterm::event::KeyCode::Left => {
-                if let Some(idx) = self.selected_event_card {
-                    self.selected_event_card = Some((idx + 3 - 1) % 3)
-                } else {
-                    self.selected_event_card = Some(0)
+                if agent.selected_action().is_none() {
+                    if let Some(idx) = self.selected_event_card {
+                        self.selected_event_card =
+                            Some((idx + num_night_events - 1) % num_night_events)
+                    } else {
+                        self.selected_event_card = Some(0)
+                    }
                 }
             }
 
             crossterm::event::KeyCode::Right => {
-                if let Some(idx) = self.selected_event_card {
-                    self.selected_event_card = Some((idx + 1) % 3)
-                } else {
-                    self.selected_event_card = Some(0)
+                if agent.selected_action().is_none() {
+                    if let Some(idx) = self.selected_event_card {
+                        self.selected_event_card = Some((idx + 1) % num_night_events)
+                    } else {
+                        self.selected_event_card = Some(0)
+                    }
                 }
             }
 
             crossterm::event::KeyCode::Char('z') => self.zoom_level = self.zoom_level.next(),
-
-            crossterm::event::KeyCode::Enter | crossterm::event::KeyCode::Backspace => {
-                match market.phase {
-                    GamePhase::Day { .. } => {
-                        if let Some(_) = self.focus_on_stonk {
-                            self.reset();
-                        } else {
-                            let idx = self.selected_stonk_index;
-                            self.reset();
-                            self.focus_on_stonk = Some(idx);
-                        }
-                    }
-                    GamePhase::Night { .. } => {}
-                }
-            }
 
             crossterm::event::KeyCode::Char('c') => {
                 self.palette_index = (self.palette_index + 1) % PALETTES.len();
@@ -216,6 +207,12 @@ impl UiOptions {
         self.focus_on_stonk = None;
         self.zoom_level = ZoomLevel::Short;
         self.selected_stonk_index = 0;
+    }
+
+    pub fn select_stonk(&mut self) {
+        let idx = self.selected_stonk_index;
+        self.reset();
+        self.focus_on_stonk = Some(idx);
     }
 }
 
@@ -397,6 +394,7 @@ fn render_day(
 fn render_night(
     frame: &mut Frame,
     counter: usize,
+    agent: &UserAgent,
     ui_options: &UiOptions,
     area: Rect,
 ) -> AppResult<()> {
@@ -424,16 +422,14 @@ fn render_night(
         vertical: 1,
     }));
 
-    let cards_split = Layout::horizontal([
-        Constraint::Length(CARD_WIDTH + 4),
-        Constraint::Length(CARD_WIDTH + 4),
-        Constraint::Length(CARD_WIDTH + 4),
-    ])
+    let cards_split = Layout::horizontal(
+        [Constraint::Length(CARD_WIDTH + 4)].repeat(agent.available_night_events().len()),
+    )
     .split(v_split[0]);
 
-    for i in 0..3 {
+    for i in 0..agent.available_night_events().len() {
         // If there is not more than half of the time still available, skip the animation
-        if counter > NIGHT_LENGTH / 2 && ui_options.render_counter < 3 * STONKS_CARDS.len() {
+        if counter < NIGHT_LENGTH / 2 && ui_options.render_counter < 3 * STONKS_CARDS.len() {
             frame.render_widget(
                 Paragraph::new(
                     STONKS_CARDS[(ui_options.render_counter / 3) % STONKS_CARDS.len()].clone(),
@@ -447,9 +443,14 @@ fn render_night(
             if ui_options.selected_event_card.is_some()
                 && ui_options.selected_event_card.unwrap() == i
             {
+                let border_style = if agent.selected_action().is_some() {
+                    Style::default().green().on_green()
+                } else {
+                    Style::default().red().on_red()
+                };
                 frame.render_widget(
                     Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone())
-                        .block(Block::bordered().border_style(Style::default().red().on_red())),
+                        .block(Block::bordered().border_style(border_style)),
                     cards_split[i].inner(&Margin {
                         horizontal: 1,
                         vertical: 0,
@@ -457,7 +458,7 @@ fn render_night(
                 );
                 frame.render_widget(
                     Block::bordered()
-                        .border_style(Style::default().red().on_red())
+                        .border_style(border_style)
                         .borders(Borders::RIGHT | Borders::LEFT),
                     cards_split[i],
                 );
@@ -471,10 +472,17 @@ fn render_night(
                 );
             }
             frame.render_widget(
-                Paragraph::new(format!("TEST {i}").bold().black()).centered(),
+                Paragraph::new(
+                    agent.available_night_events()[i]
+                        .description()
+                        .iter()
+                        .map(|l| Line::from(*l).bold().black())
+                        .collect::<Vec<Line>>(),
+                )
+                .centered(),
                 cards_split[i].inner(&Margin {
-                    horizontal: 4,
-                    vertical: 4,
+                    horizontal: 3,
+                    vertical: 3,
                 }),
             );
         }
@@ -723,7 +731,9 @@ pub fn render(
         UiDisplay::Portfolio => {}
         UiDisplay::Stonks => match market.phase {
             GamePhase::Day { .. } => render_day(frame, market, agent, ui_options, split[1])?,
-            GamePhase::Night { counter } => render_night(frame, counter, ui_options, split[1])?,
+            GamePhase::Night { counter } => {
+                render_night(frame, counter, agent, ui_options, split[1])?
+            }
         },
     }
 

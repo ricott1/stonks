@@ -1,18 +1,21 @@
 use crate::{
-    agent::{DayAction, DecisionAgent},
+    agent::{AgentAction, DecisionAgent},
     stonk::{Stonk, StonkClass, StonkCondition},
     utils::AppResult,
 };
 use rand::Rng;
-use tracing::debug;
+use tracing::{debug, info};
 
 const DAY_STARTING_HOUR: usize = 6;
-const DAY_LENGTH_HOURS: usize = 2;
+const DAY_LENGTH_HOURS: usize = 16;
 const NIGHT_LENGTH_HOURS: usize = 24 - DAY_LENGTH_HOURS;
 
+const TICKS_PER_HOUR: usize = 4;
+pub const MAX_EVENTS_PER_NIGHT: usize = 3;
+
 // Each second represents 15 minutes => 1 hour = 4 ticks.
-pub const DAY_LENGTH: usize = 4 * DAY_LENGTH_HOURS; // DAY_LENGTH = 16 hours
-pub const NIGHT_LENGTH: usize = 4 * NIGHT_LENGTH_HOURS; // NIGHT_LENGTH = 8 hours
+pub const DAY_LENGTH: usize = TICKS_PER_HOUR * DAY_LENGTH_HOURS; // DAY_LENGTH = 16 hours
+pub const NIGHT_LENGTH: usize = TICKS_PER_HOUR * NIGHT_LENGTH_HOURS; // NIGHT_LENGTH = 8 hours
 
 // We keep record of the last 12 weeks
 pub const HISTORICAL_SIZE: usize = DAY_LENGTH * 7 * 12;
@@ -31,15 +34,15 @@ impl GamePhase {
             Self::Day { counter } => {
                 format!(
                     "{:02}:{:02}",
-                    (DAY_STARTING_HOUR + (DAY_LENGTH - counter) / 4) % 24,
-                    (DAY_LENGTH - counter) % 4 * 15
+                    (DAY_STARTING_HOUR + counter / TICKS_PER_HOUR) % 24,
+                    (counter % TICKS_PER_HOUR) * 15
                 )
             }
             Self::Night { counter } => {
                 format!(
                     "{:02}:{:02}",
-                    (DAY_STARTING_HOUR + DAY_LENGTH_HOURS + (NIGHT_LENGTH - counter) / 4) % 24,
-                    (NIGHT_LENGTH - counter) % 4 * 15
+                    (DAY_STARTING_HOUR + DAY_LENGTH_HOURS + counter / TICKS_PER_HOUR) % 24,
+                    (counter % TICKS_PER_HOUR) * 15
                 )
             }
         }
@@ -155,9 +158,7 @@ impl Market {
         let mut m = Market {
             stonks,
             last_tick: 0,
-            phase: GamePhase::Day {
-                counter: DAY_LENGTH,
-            },
+            phase: GamePhase::Day { counter: 0 },
             cycles: 0,
         };
 
@@ -203,10 +204,7 @@ impl Market {
         };
         for stonk in self.stonks.iter_mut() {
             if let Some(drift) = global_drift {
-                stonk.add_condition(
-                    StonkCondition::GlobalDrift(drift),
-                    self.last_tick + DAY_LENGTH,
-                );
+                stonk.add_condition(StonkCondition::Bump(drift), self.last_tick + DAY_LENGTH);
             }
             stonk.tick(self.last_tick);
             while stonk.historical_prices.len() > HISTORICAL_SIZE {
@@ -227,26 +225,22 @@ impl StonkMarket for Market {
         match self.phase {
             GamePhase::Day { counter } => {
                 self.tick_day();
-                if counter > 1 {
+                if counter < DAY_LENGTH - 1 {
                     self.phase = GamePhase::Day {
-                        counter: counter - 1,
+                        counter: counter + 1,
                     }
                 } else {
-                    self.phase = GamePhase::Night {
-                        counter: NIGHT_LENGTH,
-                    }
+                    self.phase = GamePhase::Night { counter: 0 }
                 }
             }
             GamePhase::Night { counter } => {
                 self.tick_night();
-                if counter > 1 {
+                if counter < NIGHT_LENGTH - 1 {
                     self.phase = GamePhase::Night {
-                        counter: counter - 1,
+                        counter: counter + 1,
                     };
                 } else {
-                    self.phase = GamePhase::Day {
-                        counter: DAY_LENGTH,
-                    };
+                    self.phase = GamePhase::Day { counter: 0 };
                     self.cycles += 1;
                 }
             }
@@ -254,38 +248,38 @@ impl StonkMarket for Market {
     }
 
     fn apply_agent_action<A: DecisionAgent>(&mut self, agent: &mut A) -> AppResult<()> {
-        if let Some(action) = agent.selected_day_action() {
-            agent.clear_day_action();
-            match self.phase {
-                GamePhase::Day { .. } => match action {
-                    DayAction::Buy { stonk_id, amount } => {
-                        let stonk = &mut self.stonks[stonk_id];
-                        if stonk.number_of_shares == stonk.allocated_shares {
-                            return Err("No more shares available".into());
-                        }
-                        let cost = stonk.buy_price() * amount;
-                        agent.sub_cash(cost)?;
-                        agent.add_stonk(stonk_id, amount)?;
-                        stonk.allocated_shares += amount;
-                        stonk.add_condition(StonkCondition::BumpUp, self.last_tick + 1);
+        if let Some(action) = agent.selected_action() {
+            agent.clear_action();
+            info!("Applying action {:?}", action);
+            match action {
+                AgentAction::Buy { stonk_id, amount } => {
+                    let stonk = &mut self.stonks[stonk_id];
+                    if stonk.number_of_shares == stonk.allocated_shares {
+                        return Err("No more shares available".into());
                     }
-                    DayAction::Sell { stonk_id, amount } => {
-                        let stonk = &mut self.stonks[stonk_id];
-                        let cost = stonk.sell_price() * amount;
-                        agent.sub_stonk(stonk_id, amount)?;
-                        agent.add_cash(cost)?;
-                        stonk.allocated_shares -= amount;
-                        stonk.add_condition(StonkCondition::BumpDown, self.last_tick + 1);
-                    }
-                },
-                GamePhase::Night { .. } => {
-                    if agent.selected_day_action().is_some() {
-                        return Err("No actions allowed during night".into());
+                    let cost = stonk.buy_price() * amount;
+                    agent.sub_cash(cost)?;
+                    agent.add_stonk(stonk_id, amount)?;
+                    stonk.allocated_shares += amount;
+                    let bump_amount = amount as f64 / stonk.number_of_shares as f64;
+                    stonk.add_condition(StonkCondition::Bump(bump_amount), self.last_tick + 1);
+                }
+                AgentAction::Sell { stonk_id, amount } => {
+                    let stonk = &mut self.stonks[stonk_id];
+                    let cost = stonk.sell_price() * amount;
+                    agent.sub_stonk(stonk_id, amount)?;
+                    agent.add_cash(cost)?;
+                    stonk.allocated_shares -= amount;
+                    let bump_amount = amount as f64 / stonk.number_of_shares as f64;
+                    stonk.add_condition(StonkCondition::Bump(-bump_amount), self.last_tick + 1);
+                }
+                AgentAction::BumpStonkClass { class } => {
+                    for stonk in self.stonks.iter_mut().filter(|s| s.class == class) {
+                        stonk.add_condition(StonkCondition::Bump(1.0), self.last_tick + DAY_LENGTH)
                     }
                 }
             }
         }
-
         Ok(())
     }
 }
