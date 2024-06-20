@@ -1,6 +1,6 @@
 use rand::Rng;
 use rand_distr::{Cauchy, Distribution, Normal};
-use tracing::debug;
+use tracing::{debug, info};
 
 const MIN_DRIFT: f64 = -0.2;
 const MAX_DRIFT: f64 = -MIN_DRIFT;
@@ -15,8 +15,13 @@ pub enum StonkClass {
 
 #[derive(Debug, Clone, Copy)]
 pub enum StonkCondition {
-    Bump(f64),
-    NoShock(f64),
+    Bump {
+        amount: f64,
+    },
+    SetShockProbability {
+        value: f64,
+        previous_shock_probability: f64,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -30,7 +35,7 @@ pub struct Stonk {
     drift: f64,            // Cauchy dist mean, changes the mean price percentage variation
     drift_volatility: f64, // Influences the rate of change of drift, must be positive
     volatility: f64, // Cauchy dist variance, changes the variance of the price percentage variation, must be positive
-    shock_probability: f64, // probability to select the Cauchy dist rather than the Guassian one
+    pub shock_probability: f64, // probability to select the Cauchy dist rather than the Guassian one
     starting_price: u32,
     pub historical_prices: Vec<u32>,
     conditions: Vec<(usize, StonkCondition)>,
@@ -72,10 +77,13 @@ impl Stonk {
     pub fn apply_conditions(&mut self, current_tick: usize) {
         for (until_tick, condition) in self.conditions.iter() {
             match condition {
-                StonkCondition::Bump(amount) => self.drift += amount * self.drift_volatility,
-                StonkCondition::NoShock(previous_shock_probability) => {
+                StonkCondition::Bump { amount } => self.drift += amount * self.drift_volatility,
+                StonkCondition::SetShockProbability {
+                    value,
+                    previous_shock_probability,
+                } => {
                     if *until_tick > current_tick {
-                        self.shock_probability = 0.0
+                        self.shock_probability = *value
                     } else {
                         self.shock_probability = *previous_shock_probability
                     }
@@ -117,12 +125,13 @@ impl Stonk {
 
         self.historical_prices.push(self.price_per_share_in_cents);
 
-        debug!(
-            "{:15} μ={:+.5} σ={:.5} Δ={:+.5} price={}\n{:?}",
+        info!(
+            "{:15} μ={:+.5} σ={:.5} Δ={:+.5} shock={:.3} price={}\n{:?}",
             self.name,
             self.drift,
             self.volatility,
             price_drift,
+            self.shock_probability,
             self.price_per_share_in_cents,
             self.conditions,
         );
@@ -130,15 +139,15 @@ impl Stonk {
         self.drift /= 2.0;
         if price_drift > 0.0 {
             if self.drift > 0.0 {
-                self.add_condition(StonkCondition::Bump(0.01), current_tick + 1);
+                self.add_condition(StonkCondition::Bump { amount: 0.01 }, current_tick + 1);
             } else {
-                self.add_condition(StonkCondition::Bump(0.025), current_tick + 3);
+                self.add_condition(StonkCondition::Bump { amount: 0.025 }, current_tick + 3);
             }
         } else if price_drift < 0.0 {
             if self.drift > 0.0 {
-                self.add_condition(StonkCondition::Bump(-0.01), current_tick + 3);
+                self.add_condition(StonkCondition::Bump { amount: -0.01 }, current_tick + 3);
             } else {
-                self.add_condition(StonkCondition::Bump(-0.025), current_tick + 1);
+                self.add_condition(StonkCondition::Bump { amount: -0.025 }, current_tick + 1);
             }
         }
 
@@ -146,15 +155,21 @@ impl Stonk {
 
         // Add recovery mechanism for falling stonks. not ideal.
         if (self.price_per_share_in_cents as f64) < self.starting_price as f64 / 8.0 {
-            self.add_condition(StonkCondition::Bump(0.25), current_tick + 1);
+            self.add_condition(StonkCondition::Bump { amount: 0.25 }, current_tick + 1);
             self.add_condition(
-                StonkCondition::NoShock(self.shock_probability),
+                StonkCondition::SetShockProbability {
+                    value: 0.0,
+                    previous_shock_probability: self.shock_probability,
+                },
                 current_tick + 1,
             );
         } else if (self.price_per_share_in_cents as f64) > self.starting_price as f64 * 16.0 {
-            self.add_condition(StonkCondition::Bump(-0.25), current_tick + 1);
+            self.add_condition(StonkCondition::Bump { amount: -0.25 }, current_tick + 1);
             self.add_condition(
-                StonkCondition::NoShock(self.shock_probability),
+                StonkCondition::SetShockProbability {
+                    value: 0.0,
+                    previous_shock_probability: self.shock_probability,
+                },
                 current_tick + 1,
             );
         }

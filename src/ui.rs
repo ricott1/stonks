@@ -1,5 +1,3 @@
-use std::fmt::{self};
-
 use crate::agent::{DecisionAgent, UserAgent};
 use crate::market::{GamePhase, Market, DAY_LENGTH, HISTORICAL_SIZE, NIGHT_LENGTH};
 use crate::stonk::Stonk;
@@ -16,6 +14,7 @@ use ratatui::widgets::{
     TableState,
 };
 use ratatui::{layout::Layout, Frame};
+use std::fmt::{self};
 
 const STONKS: [&'static str; 6] = [
     "███████╗████████╗ ██████╗ ███╗   ██╗██╗  ██╗███████╗██╗",
@@ -605,7 +604,12 @@ fn render_stonk(
         .collect();
 
     let chart = Chart::new(datasets)
-        .block(Block::bordered().title(format!(" Stonk Market: {:?} ", market.phase).cyan().bold()))
+        .block(
+            Block::bordered()
+                .title(format!(" Stonk Market: {} ", stonk.name))
+                .style(styles[stonk.id])
+                .bold(),
+        )
         .x_axis(
             Axis::default()
                 .title(format!("Tick (x{})", clustering))
@@ -692,7 +696,7 @@ fn render_footer(
                 lines.push(
                     format!(
                         "{:24} {:24} {:24}",
-                        "`↑↓`:select stonk", "`enter`:main table", "`z`:zoom level",
+                        "`↑↓`:select stonk", "`return`:main table", "`z`:zoom level",
                     )
                     .into(),
                 );
@@ -728,16 +732,20 @@ fn render_footer(
                 );
             } else {
                 lines.push(
-                    format!("{:24} {:24}", "`↑↓`:select stonk", "`enter`:focus on stonk",).into(),
+                    format!(
+                        "{:24} {:24}",
+                        "`↑↓`:select stonk", "`return`:focus on stonk",
+                    )
+                    .into(),
                 );
             }
         }
         GamePhase::Night { .. } => {
-            if let Some(idx) = ui_options.selected_event_card {
-                lines
-                    .push(format!("You selected `{}`", agent.available_night_events()[idx]).into());
+            if ui_options.selected_event_card.is_some() && agent.selected_action().is_some() {
+                let event = agent.available_night_events()[ui_options.selected_event_card.unwrap()];
+                lines.push(format!("You selected `{}`", event).into());
             } else {
-                lines.push(format!("{:24} {:24}", "`←→`:select event", "`enter`:confirm",).into());
+                lines.push(format!("{:24} {:24}", "`←→`:select event", "`return`:confirm",).into());
             }
         }
     }

@@ -10,12 +10,14 @@ pub enum AgentAction {
     Buy { stonk_id: usize, amount: u32 },
     Sell { stonk_id: usize, amount: u32 },
     BumpStonkClass { class: StonkClass },
+    CrashAll,
 }
 
 #[derive(Debug, Clone, Copy, EnumIter)]
 pub enum NightEvent {
     War,
     ColdWinter,
+    MarketCrash,
 }
 
 impl Display for NightEvent {
@@ -23,6 +25,7 @@ impl Display for NightEvent {
         match self {
             Self::War => write!(f, "War"),
             Self::ColdWinter => write!(f, "Cold winter"),
+            Self::MarketCrash => write!(f, "Market crash"),
         }
     }
 }
@@ -31,15 +34,27 @@ impl NightEvent {
     pub fn description(&self) -> Vec<&str> {
         match self {
             Self::War => vec![
+                "WAR",
+                "",
                 "It's war time!",
                 "Chance for all war stonks",
                 "to get a big bump.",
             ],
             Self::ColdWinter => vec![
+                "COLD WINTER",
+                "",
                 "Apparently next winter",
                 "is gonna be very cold,",
                 "better prepare soon. So",
                 "much for global warming!",
+            ],
+            Self::MarketCrash => vec![
+                "MARKET CRASH",
+                "",
+                "It's 1929 all over again,",
+                "or was it 1987?",
+                "Or 2001? Or 2008?",
+                "Or...",
             ],
         }
     }
@@ -48,6 +63,7 @@ impl NightEvent {
         match self {
             Self::War => Box::new(|agent| agent.cash() > 10),
             Self::ColdWinter => Box::new(|agent| agent.cash() > 10),
+            Self::MarketCrash => Box::new(|agent| agent.cash() > 10),
         }
     }
 
@@ -59,6 +75,7 @@ impl NightEvent {
             Self::ColdWinter => Some(AgentAction::BumpStonkClass {
                 class: StonkClass::Commodity,
             }),
+            Self::MarketCrash => Some(AgentAction::CrashAll),
         }
     }
 }

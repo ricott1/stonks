@@ -204,7 +204,10 @@ impl Market {
         };
         for stonk in self.stonks.iter_mut() {
             if let Some(drift) = global_drift {
-                stonk.add_condition(StonkCondition::Bump(drift), self.last_tick + DAY_LENGTH);
+                stonk.add_condition(
+                    StonkCondition::Bump { amount: drift },
+                    self.last_tick + DAY_LENGTH,
+                );
             }
             stonk.tick(self.last_tick);
             while stonk.historical_prices.len() > HISTORICAL_SIZE {
@@ -262,7 +265,12 @@ impl StonkMarket for Market {
                     agent.add_stonk(stonk_id, amount)?;
                     stonk.allocated_shares += amount;
                     let bump_amount = amount as f64 / stonk.number_of_shares as f64;
-                    stonk.add_condition(StonkCondition::Bump(bump_amount), self.last_tick + 1);
+                    stonk.add_condition(
+                        StonkCondition::Bump {
+                            amount: bump_amount,
+                        },
+                        self.last_tick + 1,
+                    );
                 }
                 AgentAction::Sell { stonk_id, amount } => {
                     let stonk = &mut self.stonks[stonk_id];
@@ -271,11 +279,34 @@ impl StonkMarket for Market {
                     agent.add_cash(cost)?;
                     stonk.allocated_shares -= amount;
                     let bump_amount = amount as f64 / stonk.number_of_shares as f64;
-                    stonk.add_condition(StonkCondition::Bump(-bump_amount), self.last_tick + 1);
+                    stonk.add_condition(
+                        StonkCondition::Bump {
+                            amount: -bump_amount,
+                        },
+                        self.last_tick + 1,
+                    );
                 }
                 AgentAction::BumpStonkClass { class } => {
                     for stonk in self.stonks.iter_mut().filter(|s| s.class == class) {
-                        stonk.add_condition(StonkCondition::Bump(1.0), self.last_tick + DAY_LENGTH)
+                        stonk.add_condition(
+                            StonkCondition::Bump { amount: 1.0 },
+                            self.last_tick + DAY_LENGTH,
+                        )
+                    }
+                }
+                AgentAction::CrashAll => {
+                    for stonk in self.stonks.iter_mut() {
+                        stonk.add_condition(
+                            StonkCondition::Bump { amount: -1.0 },
+                            self.last_tick + DAY_LENGTH,
+                        );
+                        stonk.add_condition(
+                            StonkCondition::SetShockProbability {
+                                value: 0.25,
+                                previous_shock_probability: stonk.shock_probability,
+                            },
+                            self.last_tick + DAY_LENGTH,
+                        )
                     }
                 }
             }
