@@ -160,7 +160,7 @@ impl UiOptions {
             }
 
             crossterm::event::KeyCode::Left => {
-                if agent.selected_action().is_none() {
+                if agent.selected_action().is_none() && num_night_events > 0 {
                     if let Some(idx) = self.selected_event_card {
                         self.selected_event_card =
                             Some((idx + num_night_events - 1) % num_night_events)
@@ -171,7 +171,7 @@ impl UiOptions {
             }
 
             crossterm::event::KeyCode::Right => {
-                if agent.selected_action().is_none() {
+                if agent.selected_action().is_none() && num_night_events > 0 {
                     if let Some(idx) = self.selected_event_card {
                         self.selected_event_card = Some((idx + 1) % num_night_events)
                     } else {
