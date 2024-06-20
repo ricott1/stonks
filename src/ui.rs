@@ -682,33 +682,52 @@ fn render_header(
     number_of_players: usize,
     area: Rect,
 ) {
-    let extra_text = if let Some(stonk_id) = ui_options.focus_on_stonk {
-        let amount = agent.owned_stonks()[stonk_id];
-        let stonk = &market.stonks[stonk_id];
-        format!(
-            "Owned shares {} ({:.03}%) ",
-            amount,
-            (amount as f64 / stonk.number_of_shares as f64)
-        )
-    } else {
-        format!(
-            "{} player{} online - `ssh {}@frittura.org -p 3333`",
-            number_of_players,
-            if number_of_players > 1 { "s" } else { "" },
-            ui_options.user_id
-        )
+    let header_text = match market.phase {
+        GamePhase::Day { .. } => {
+            if let Some(stonk_id) = ui_options.focus_on_stonk {
+                let amount = agent.owned_stonks()[stonk_id];
+                let stonk = &market.stonks[stonk_id];
+                let extra_text = format!(
+                    "Owned shares {} ({:.03}%) ",
+                    amount,
+                    (amount as f64 / stonk.number_of_shares as f64)
+                );
+                format!(
+                    "{:5} {:<5} {} - Cash: ${:<6.2} - {}",
+                    "Day",
+                    market.cycles + 1,
+                    market.phase.formatted_time(),
+                    agent.formatted_cash(),
+                    extra_text,
+                )
+            } else {
+                format!(
+                    "{} player{} online - `ssh {}@frittura.org -p 3333`",
+                    number_of_players,
+                    if number_of_players > 1 { "s" } else { "" },
+                    ui_options.user_id
+                )
+            }
+        }
+        GamePhase::Night { .. } => {
+            let extra_text = format!(
+                "{} player{} online - `ssh {}@frittura.org -p 3333`",
+                number_of_players,
+                if number_of_players > 1 { "s" } else { "" },
+                ui_options.user_id
+            );
+            format!(
+                "{:5} {:<5} {} - Cash: ${:<6.2} - {}",
+                "Night",
+                market.cycles + 1,
+                market.phase.formatted_time(),
+                agent.formatted_cash(),
+                extra_text,
+            )
+        }
     };
 
-    frame.render_widget(
-        Paragraph::new(format!(
-            "Day {:<5} {} - Cash: ${:<6.2} - {}",
-            market.cycles + 1,
-            market.phase.formatted_time(),
-            agent.formatted_cash(),
-            extra_text,
-        )),
-        area,
-    );
+    frame.render_widget(Paragraph::new(header_text), area);
 }
 
 fn render_footer(
