@@ -378,7 +378,7 @@ fn render_day(
 ) -> AppResult<()> {
     if let Some(stonk_id) = ui_options.focus_on_stonk {
         let stonk = &market.stonks[stonk_id];
-        render_stonk(frame, market, agent, ui_options, stonk, area)?;
+        render_stonk(frame, market, ui_options, stonk, area)?;
     } else {
         let colors = TableColors::new(&PALETTES[ui_options.palette_index]);
         let table = build_stonks_table(market, agent, colors);
@@ -499,19 +499,10 @@ fn render_night(
 fn render_stonk(
     frame: &mut Frame,
     market: &Market,
-    agent: &UserAgent,
     ui_options: &UiOptions,
     stonk: &Stonk,
     area: Rect,
 ) -> AppResult<()> {
-    let split = Layout::vertical([
-        Constraint::Min(0),
-        Constraint::Length(1),
-        Constraint::Length(1),
-        Constraint::Length(1),
-    ])
-    .split(area);
-
     let styles = vec![
         Style::default().cyan(),
         Style::default().magenta(),
@@ -595,7 +586,7 @@ fn render_stonk(
         max_y_bound = max_price / 20 * 20 + 20;
     }
 
-    let n_y_labels = split[0].height as usize / 6;
+    let n_y_labels = area.height as usize / 6;
     let y_labels: Vec<Span<'static>> = (0..n_y_labels)
         .map(|r| {
             format!(
@@ -634,45 +625,7 @@ fn render_stonk(
                 .bounds([min_y_bound as f64, max_y_bound as f64]),
         );
 
-    frame.render_widget(chart, split[0]);
-
-    frame.render_widget(
-        Paragraph::new(format!(
-            "{:24} {:24} {:24}",
-            "`↑↓`:select stonk", "`enter`:main table", "`z`:zoom level",
-        )),
-        split[1],
-    );
-
-    frame.render_widget(
-        Paragraph::new(format!(
-            "{:24} {:24}",
-            format!("`b`: buy  x1 (${:.2})", stonk.formatted_buy_price()),
-            format!(
-                "`B`: buy  x100 (${:.2})",
-                10.0 * stonk.formatted_buy_price()
-            ),
-        )),
-        split[2],
-    );
-
-    let owned_amount = agent.owned_stonks()[stonk.id];
-    frame.render_widget(
-        Paragraph::new(format!(
-            "{:24} {:24} {:24}",
-            format!("`s`: sell x1 (${:.2})", stonk.formatted_sell_price()),
-            format!(
-                "`S`: sell x100 (${:.2})",
-                10.0 * stonk.formatted_sell_price()
-            ),
-            format!(
-                "`d`: sell x{} (${:.2})",
-                owned_amount,
-                owned_amount as f64 * stonk.formatted_sell_price()
-            ),
-        )),
-        split[3],
-    );
+    frame.render_widget(chart, area);
 
     Ok(())
 }
@@ -687,18 +640,14 @@ fn clear(frame: &mut Frame) {
     frame.render_widget(clear, area);
 }
 
-pub fn render(
+fn render_header(
     frame: &mut Frame,
     market: &Market,
     agent: &UserAgent,
     ui_options: &UiOptions,
     number_of_players: usize,
-) -> AppResult<()> {
-    clear(frame);
-
-    let area = frame.size();
-    let split = Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).split(area);
-
+    area: Rect,
+) {
     let extra_text = if let Some(stonk_id) = ui_options.focus_on_stonk {
         let amount = agent.owned_stonks()[stonk_id];
         let stonk = &market.stonks[stonk_id];
@@ -724,6 +673,87 @@ pub fn render(
             agent.formatted_cash(),
             extra_text,
         )),
+        area,
+    );
+}
+
+fn render_footer(
+    frame: &mut Frame,
+    market: &Market,
+    agent: &UserAgent,
+    ui_options: &UiOptions,
+    area: Rect,
+) {
+    let mut lines: Vec<Line> = vec![];
+
+    if let Some(stonk_id) = ui_options.focus_on_stonk {
+        lines.push(
+            format!(
+                "{:24} {:24} {:24}",
+                "`↑↓`:select stonk", "`enter`:main table", "`z`:zoom level",
+            )
+            .into(),
+        );
+
+        let stonk = &market.stonks[stonk_id];
+        lines.push(
+            format!(
+                "{:24} {:24}",
+                format!("`b`: buy  x1 (${:.2})", stonk.formatted_buy_price()),
+                format!(
+                    "`B`: buy  x100 (${:.2})",
+                    10.0 * stonk.formatted_buy_price()
+                ),
+            )
+            .into(),
+        );
+        let owned_amount = agent.owned_stonks()[stonk.id];
+        lines.push(
+            format!(
+                "{:24} {:24} {:24}",
+                format!("`s`: sell x1 (${:.2})", stonk.formatted_sell_price()),
+                format!(
+                    "`S`: sell x100 (${:.2})",
+                    10.0 * stonk.formatted_sell_price()
+                ),
+                format!(
+                    "`d`: sell x{} (${:.2})",
+                    owned_amount,
+                    owned_amount as f64 * stonk.formatted_sell_price()
+                ),
+            )
+            .into(),
+        );
+    } else {
+        lines.push(format!("{:24} {:24}", "`↑↓`:select stonk", "`enter`:focus on stonk",).into());
+    }
+
+    frame.render_widget(Paragraph::new(lines), area);
+}
+
+pub fn render(
+    frame: &mut Frame,
+    market: &Market,
+    agent: &UserAgent,
+    ui_options: &UiOptions,
+    number_of_players: usize,
+) -> AppResult<()> {
+    clear(frame);
+
+    let area = frame.size();
+    let split = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Min(0),
+        Constraint::Length(3),
+    ])
+    .split(area);
+
+    self::render_header(
+        frame,
+        market,
+        agent,
+        ui_options,
+        number_of_players,
         split[0],
     );
 
@@ -736,6 +766,8 @@ pub fn render(
             }
         },
     }
+
+    self::render_footer(frame, market, agent, ui_options, split[2]);
 
     Ok(())
 }
