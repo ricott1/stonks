@@ -686,46 +686,60 @@ fn render_footer(
 ) {
     let mut lines: Vec<Line> = vec![];
 
-    if let Some(stonk_id) = ui_options.focus_on_stonk {
-        lines.push(
-            format!(
-                "{:24} {:24} {:24}",
-                "`↑↓`:select stonk", "`enter`:main table", "`z`:zoom level",
-            )
-            .into(),
-        );
+    match market.phase {
+        GamePhase::Day { .. } => {
+            if let Some(stonk_id) = ui_options.focus_on_stonk {
+                lines.push(
+                    format!(
+                        "{:24} {:24} {:24}",
+                        "`↑↓`:select stonk", "`enter`:main table", "`z`:zoom level",
+                    )
+                    .into(),
+                );
 
-        let stonk = &market.stonks[stonk_id];
-        lines.push(
-            format!(
-                "{:24} {:24}",
-                format!("`b`: buy  x1 (${:.2})", stonk.formatted_buy_price()),
-                format!(
-                    "`B`: buy  x100 (${:.2})",
-                    10.0 * stonk.formatted_buy_price()
-                ),
-            )
-            .into(),
-        );
-        let owned_amount = agent.owned_stonks()[stonk.id];
-        lines.push(
-            format!(
-                "{:24} {:24} {:24}",
-                format!("`s`: sell x1 (${:.2})", stonk.formatted_sell_price()),
-                format!(
-                    "`S`: sell x100 (${:.2})",
-                    10.0 * stonk.formatted_sell_price()
-                ),
-                format!(
-                    "`d`: sell x{} (${:.2})",
-                    owned_amount,
-                    owned_amount as f64 * stonk.formatted_sell_price()
-                ),
-            )
-            .into(),
-        );
-    } else {
-        lines.push(format!("{:24} {:24}", "`↑↓`:select stonk", "`enter`:focus on stonk",).into());
+                let stonk = &market.stonks[stonk_id];
+                lines.push(
+                    format!(
+                        "{:24} {:24}",
+                        format!("`b`: buy  x1 (${:.2})", stonk.formatted_buy_price()),
+                        format!(
+                            "`B`: buy  x100 (${:.2})",
+                            100.0 * stonk.formatted_buy_price()
+                        ),
+                    )
+                    .into(),
+                );
+                let owned_amount = agent.owned_stonks()[stonk.id];
+                lines.push(
+                    format!(
+                        "{:24} {:24} {:24}",
+                        format!("`s`: sell x1 (${:.2})", stonk.formatted_sell_price()),
+                        format!(
+                            "`S`: sell x100 (${:.2})",
+                            100.0 * stonk.formatted_sell_price()
+                        ),
+                        format!(
+                            "`d`: sell x{} (${:.2})",
+                            owned_amount,
+                            owned_amount as f64 * stonk.formatted_sell_price()
+                        ),
+                    )
+                    .into(),
+                );
+            } else {
+                lines.push(
+                    format!("{:24} {:24}", "`↑↓`:select stonk", "`enter`:focus on stonk",).into(),
+                );
+            }
+        }
+        GamePhase::Night { .. } => {
+            if let Some(idx) = ui_options.selected_event_card {
+                lines
+                    .push(format!("You selected `{}`", agent.available_night_events()[idx]).into());
+            } else {
+                lines.push(format!("{:24} {:24}", "`←→`:select event", "`enter`:confirm",).into());
+            }
+        }
     }
 
     frame.render_widget(Paragraph::new(lines), area);
