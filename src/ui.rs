@@ -778,9 +778,12 @@ fn render_footer(
             }
         }
         GamePhase::Night { .. } => {
-            if ui_options.selected_event_card.is_some() && agent.selected_action().is_some() {
-                let event = agent.available_night_events()[ui_options.selected_event_card.unwrap()];
-                lines.push(format!("You selected `{}`", event).into());
+            if let Some(action) = agent.selected_action() {
+                for event in agent.available_night_events().iter() {
+                    if event.action() == action {
+                        lines.push(format!("You selected `{}`", event).into());
+                    }
+                }
             } else {
                 lines.push(format!("{:28} {:28}", "`←→`:select event", "`return`:confirm",).into());
             }
