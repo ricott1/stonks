@@ -352,7 +352,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
     Table::new(
         rows,
         [
-            Constraint::Length(24),
+            Constraint::Length(20),
             Constraint::Length(10),
             Constraint::Length(10),
             Constraint::Length(10),
@@ -555,7 +555,6 @@ fn render_stonk(
 
     let datasets = vec![Dataset::default()
         .graph_type(GraphType::Line)
-        .name(format!("{}: {}", stonk.id + 1, stonk.name.clone()))
         .marker(symbols::Marker::HalfBlock)
         .style(styles[stonk.id])
         .data(&datas)];
@@ -695,20 +694,27 @@ fn render_footer(
             if let Some(stonk_id) = ui_options.focus_on_stonk {
                 lines.push(
                     format!(
-                        "{:24} {:24} {:24}",
+                        "{:28} {:28} {:28}",
                         "`↑↓`:select stonk", "`return`:main table", "`z`:zoom level",
                     )
                     .into(),
                 );
 
                 let stonk = &market.stonks[stonk_id];
+
+                let max_buy_amount = agent.cash() / stonk.buy_price();
                 lines.push(
                     format!(
-                        "{:24} {:24}",
+                        "{:28} {:28} {:28}",
                         format!("`b`: buy  x1 (${:.2})", stonk.formatted_buy_price()),
                         format!(
                             "`B`: buy  x100 (${:.2})",
                             100.0 * stonk.formatted_buy_price()
+                        ),
+                        format!(
+                            "`m`: buy  x{} (${:.2})",
+                            max_buy_amount,
+                            max_buy_amount as f64 * stonk.formatted_buy_price()
                         ),
                     )
                     .into(),
@@ -716,7 +722,7 @@ fn render_footer(
                 let owned_amount = agent.owned_stonks()[stonk.id];
                 lines.push(
                     format!(
-                        "{:24} {:24} {:24}",
+                        "{:28} {:28} {:28}",
                         format!("`s`: sell x1 (${:.2})", stonk.formatted_sell_price()),
                         format!(
                             "`S`: sell x100 (${:.2})",
@@ -733,7 +739,7 @@ fn render_footer(
             } else {
                 lines.push(
                     format!(
-                        "{:24} {:24}",
+                        "{:28} {:28}",
                         "`↑↓`:select stonk", "`return`:focus on stonk",
                     )
                     .into(),
@@ -745,7 +751,7 @@ fn render_footer(
                 let event = agent.available_night_events()[ui_options.selected_event_card.unwrap()];
                 lines.push(format!("You selected `{}`", event).into());
             } else {
-                lines.push(format!("{:24} {:24}", "`←→`:select event", "`return`:confirm",).into());
+                lines.push(format!("{:28} {:28}", "`←→`:select event", "`return`:confirm",).into());
             }
         }
     }
