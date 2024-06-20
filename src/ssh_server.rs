@@ -319,7 +319,7 @@ impl AppServer {
 
         let config = Config {
             inactivity_timeout: Some(std::time::Duration::from_secs(360)),
-            auth_rejection_time: std::time::Duration::from_secs(3),
+            auth_rejection_time: std::time::Duration::from_secs(2),
             auth_rejection_time_initial: Some(std::time::Duration::from_secs(0)),
             keys: vec![key_pair],
             ..Default::default()

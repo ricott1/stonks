@@ -161,7 +161,9 @@ impl DecisionAgent for UserAgent {
     }
 
     fn select_action(&mut self, action: AgentAction) {
-        self.pending_action = Some(action);
+        if self.pending_action.is_none() {
+            self.pending_action = Some(action);
+        }
     }
 
     fn selected_action(&self) -> Option<AgentAction> {

@@ -24,21 +24,21 @@ pub const NUMBER_OF_STONKS: usize = 8;
 
 #[derive(Debug, Clone, Copy)]
 pub enum GamePhase {
-    Day { counter: usize },
-    Night { counter: usize },
+    Day { cycle: usize, counter: usize },
+    Night { cycle: usize, counter: usize },
 }
 
 impl GamePhase {
-    pub fn formatted_time(&self) -> String {
+    fn formatted_time(&self) -> String {
         match self {
-            Self::Day { counter } => {
+            Self::Day { counter, .. } => {
                 format!(
                     "{:02}:{:02}",
                     (DAY_STARTING_HOUR + counter / TICKS_PER_HOUR) % 24,
                     (counter % TICKS_PER_HOUR) * 15
                 )
             }
-            Self::Night { counter } => {
+            Self::Night { counter, .. } => {
                 format!(
                     "{:02}:{:02}",
                     (DAY_STARTING_HOUR + DAY_LENGTH_HOURS + counter / TICKS_PER_HOUR) % 24,
@@ -46,6 +46,30 @@ impl GamePhase {
                 )
             }
         }
+    }
+
+    fn season(&self) -> &str {
+        let seasons = ["Spring", "Summer", "Fall", "Winter"];
+        match self {
+            Self::Day { cycle, .. } => seasons[(cycle / 90) % 4],
+            Self::Night { cycle, .. } => seasons[(cycle / 90) % 4],
+        }
+    }
+
+    fn year(&self) -> String {
+        match self {
+            Self::Day { cycle, .. } => (cycle / 90 / 4).to_string(),
+            Self::Night { cycle, .. } => (cycle / 90 / 4).to_string(),
+        }
+    }
+
+    pub fn formatted(&self) -> String {
+        format!(
+            "{:6} {} {}",
+            self.season(),
+            self.year(),
+            self.formatted_time()
+        )
     }
 }
 
@@ -59,7 +83,6 @@ pub struct Market {
     pub stonks: [Stonk; NUMBER_OF_STONKS],
     pub last_tick: usize,
     pub phase: GamePhase,
-    pub cycles: usize,
 }
 
 impl Market {
@@ -158,12 +181,22 @@ impl Market {
         let mut m = Market {
             stonks,
             last_tick: 0,
-            phase: GamePhase::Day { counter: 0 },
-            cycles: 0,
+            phase: GamePhase::Day {
+                cycle: 0,
+                counter: 0,
+            },
         };
 
-        while m.cycles < HISTORICAL_SIZE / DAY_LENGTH {
+        loop {
             m.tick();
+            match m.phase {
+                GamePhase::Day { cycle, .. } => {
+                    if cycle >= HISTORICAL_SIZE / DAY_LENGTH {
+                        break;
+                    }
+                }
+                _ => {}
+            }
         }
 
         debug!("Starting market at {:?}", m.phase);
@@ -226,25 +259,29 @@ impl StonkMarket for Market {
     fn tick(&mut self) {
         debug!("\nMarket tick {:?}", self.phase);
         match self.phase {
-            GamePhase::Day { counter } => {
+            GamePhase::Day { cycle, counter } => {
                 self.tick_day();
                 if counter < DAY_LENGTH - 1 {
                     self.phase = GamePhase::Day {
+                        cycle,
                         counter: counter + 1,
                     }
                 } else {
-                    self.phase = GamePhase::Night { counter: 0 }
+                    self.phase = GamePhase::Night { cycle, counter: 0 }
                 }
             }
-            GamePhase::Night { counter } => {
+            GamePhase::Night { cycle, counter } => {
                 self.tick_night();
                 if counter < NIGHT_LENGTH - 1 {
                     self.phase = GamePhase::Night {
+                        cycle,
                         counter: counter + 1,
                     };
                 } else {
-                    self.phase = GamePhase::Day { counter: 0 };
-                    self.cycles += 1;
+                    self.phase = GamePhase::Day {
+                        cycle: cycle + 1,
+                        counter: 0,
+                    };
                 }
             }
         }

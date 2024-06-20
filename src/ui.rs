@@ -612,7 +612,7 @@ fn render_stonk(
     if max_price < 20 {
         max_y_bound = 40;
     } else {
-        max_y_bound = max_price / 20 * 20 + 20;
+        max_y_bound = max_price / 20 * 20 + 20 + max_price % 20;
     }
 
     let n_y_labels = area.height as usize / 6;
@@ -651,8 +651,8 @@ fn render_stonk(
         .y_axis(
             Axis::default()
                 .title(format!(
-                    "Price ${}",
-                    (stonk.price_per_share_in_cents as f64 / 100.0) as u32
+                    "Price ${:.2}",
+                    stonk.price_per_share_in_cents as f64 / 100.0
                 ))
                 .style(Style::default().gray())
                 .labels(y_labels)
@@ -682,23 +682,15 @@ fn render_header(
     number_of_players: usize,
     area: Rect,
 ) {
-    let header_text = match market.phase {
+    let extra_text = match market.phase {
         GamePhase::Day { .. } => {
             if let Some(stonk_id) = ui_options.focus_on_stonk {
                 let amount = agent.owned_stonks()[stonk_id];
                 let stonk = &market.stonks[stonk_id];
-                let extra_text = format!(
+                format!(
                     "Owned shares {} ({:.03}%) ",
                     amount,
                     (amount as f64 / stonk.number_of_shares as f64)
-                );
-                format!(
-                    "{:5} {:<5} {} - Cash: ${:<6.2} - {}",
-                    "Day",
-                    market.cycles + 1,
-                    market.phase.formatted_time(),
-                    agent.formatted_cash(),
-                    extra_text,
                 )
             } else {
                 format!(
@@ -710,22 +702,20 @@ fn render_header(
             }
         }
         GamePhase::Night { .. } => {
-            let extra_text = format!(
+            format!(
                 "{} player{} online - `ssh {}@frittura.org -p 3333`",
                 number_of_players,
                 if number_of_players > 1 { "s" } else { "" },
                 ui_options.user_id
-            );
-            format!(
-                "{:5} {:<5} {} - Cash: ${:<6.2} - {}",
-                "Night",
-                market.cycles + 1,
-                market.phase.formatted_time(),
-                agent.formatted_cash(),
-                extra_text,
             )
         }
     };
+    let header_text = format!(
+        "{:12} - Cash: ${:<6.2} - {}",
+        market.phase.formatted(),
+        agent.formatted_cash(),
+        extra_text,
+    );
 
     frame.render_widget(Paragraph::new(header_text), area);
 }
@@ -842,7 +832,7 @@ pub fn render(
         UiDisplay::Portfolio => {}
         UiDisplay::Stonks => match market.phase {
             GamePhase::Day { .. } => render_day(frame, market, agent, ui_options, split[1])?,
-            GamePhase::Night { counter } => {
+            GamePhase::Night { counter, .. } => {
                 render_night(frame, counter, agent, ui_options, split[1])?
             }
         },
