@@ -442,14 +442,14 @@ impl Handler for AppServer {
                         let mut persisted_agents = self.persisted_agents.lock().await;
 
                         let now = SystemTime::now();
-                        persisted_agents.insert(
-                            client.ui_options.user_id.clone(),
-                            (now, client.agent.clone()),
-                        );
                         client.last_action = now;
                         client
                             .handle_key_events(key_event, &market)
                             .map_err(|e| anyhow::anyhow!("Error: {}", e))?;
+                        persisted_agents.insert(
+                            client.ui_options.user_id.clone(),
+                            (now, client.agent.clone()),
+                        );
                         client
                             .tui
                             .draw(
