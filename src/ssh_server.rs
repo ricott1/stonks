@@ -142,6 +142,15 @@ impl Client {
                 }
             }
 
+            KeyCode::Char('m') => {
+                if let Some(stonk_id) = self.ui_options.focus_on_stonk {
+                    let stonk = &market.stonks[stonk_id];
+                    let amount = self.agent.cash() / stonk.buy_price();
+                    self.agent
+                        .select_action(AgentAction::Buy { stonk_id, amount })
+                }
+            }
+
             KeyCode::Char('s') => {
                 if let Some(stonk_id) = self.ui_options.focus_on_stonk {
                     let amount = if key_event.modifiers == KeyModifiers::SHIFT {

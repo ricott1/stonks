@@ -462,13 +462,15 @@ fn render_night(
                     cards_split[i],
                 );
             } else {
-                frame.render_widget(
-                    Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone()),
-                    cards_split[i].inner(&Margin {
-                        horizontal: 2,
-                        vertical: 1,
-                    }),
-                );
+                if agent.selected_action().is_none() {
+                    frame.render_widget(
+                        Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone()),
+                        cards_split[i].inner(&Margin {
+                            horizontal: 2,
+                            vertical: 1,
+                        }),
+                    );
+                }
             }
             frame.render_widget(
                 Paragraph::new(

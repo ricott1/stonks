@@ -123,7 +123,7 @@ impl Market {
             Market::new_stonk(
                 5,
                 StonkClass::War,
-                "Cubbit".into(),
+                "Marasma".into(),
                 12000,
                 10000,
                 0.000,
@@ -145,7 +145,7 @@ impl Market {
             Market::new_stonk(
                 7,
                 StonkClass::Commodity,
-                "Tubbic".into(),
+                "Cannoli Magici".into(),
                 12000,
                 10000,
                 0.001,
@@ -297,7 +297,7 @@ impl StonkMarket for Market {
                 AgentAction::CrashAll => {
                     for stonk in self.stonks.iter_mut() {
                         stonk.add_condition(
-                            StonkCondition::Bump { amount: -1.0 },
+                            StonkCondition::Bump { amount: -5.0 },
                             self.last_tick + DAY_LENGTH,
                         );
                         stonk.add_condition(
