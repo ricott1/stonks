@@ -35,11 +35,13 @@ static STONKS_LINES: Lazy<Vec<Line>> = Lazy::new(|| {
 static STONKS_CARDS: Lazy<Vec<Vec<Line>>> = Lazy::new(|| {
     (1..=13)
         .map(|n| {
-            img_to_lines(format!("card_back{:02}.png", n).as_str())
-                .expect("Cannot load stonk image")
+            img_to_lines(format!("card{:02}.png", n).as_str()).expect("Cannot load stonk image")
         })
         .collect::<Vec<Vec<Line>>>()
 });
+
+static UNSELECTED_CARD: Lazy<Vec<Line>> =
+    Lazy::new(|| img_to_lines("unselected_card.png").expect("Cannot load stonk image"));
 
 const CARD_WIDTH: u16 = 28;
 const CARD_HEIGHT: u16 = 40 / 2;
@@ -411,9 +413,9 @@ fn render_night(
     .split(area);
 
     let v_split = Layout::vertical([
-        Constraint::Max(CARD_HEIGHT + 2),
-        Constraint::Length(2),
         Constraint::Length(7),
+        Constraint::Length(2),
+        Constraint::Max(CARD_HEIGHT + 2),
         Constraint::Length(2),
     ])
     .split(split[1].inner(&Margin {
@@ -424,7 +426,7 @@ fn render_night(
     let cards_split = Layout::horizontal(
         [Constraint::Length(CARD_WIDTH + 4)].repeat(agent.available_night_events().len()),
     )
-    .split(v_split[0]);
+    .split(v_split[2]);
 
     for i in 0..agent.available_night_events().len() {
         // If there is not more than half of the time still available, skip the animation
@@ -462,7 +464,15 @@ fn render_night(
                     cards_split[i],
                 );
             } else {
-                if agent.selected_action().is_none() {
+                if agent.selected_action().is_some() {
+                    frame.render_widget(
+                        Paragraph::new(UNSELECTED_CARD.clone()),
+                        cards_split[i].inner(&Margin {
+                            horizontal: 2,
+                            vertical: 1,
+                        }),
+                    );
+                } else {
                     frame.render_widget(
                         Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone()),
                         cards_split[i].inner(&Margin {
@@ -488,11 +498,8 @@ fn render_night(
             );
         }
     }
-    frame.render_widget(
-        Paragraph::new(format!("Get ready to",)).centered(),
-        v_split[2],
-    );
-    frame.render_widget(Paragraph::new(STONKS_LINES.clone()).centered(), v_split[2]);
+
+    frame.render_widget(Paragraph::new(STONKS_LINES.clone()).centered(), v_split[0]);
 
     Ok(())
 }
