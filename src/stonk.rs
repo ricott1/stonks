@@ -1,6 +1,6 @@
 use rand::Rng;
 use rand_distr::{Cauchy, Distribution, Normal};
-use tracing::{debug, info};
+use tracing::debug;
 
 const MIN_DRIFT: f64 = -0.2;
 const MAX_DRIFT: f64 = -MIN_DRIFT;
@@ -125,7 +125,7 @@ impl Stonk {
 
         self.historical_prices.push(self.price_per_share_in_cents);
 
-        info!(
+        debug!(
             "{:15} μ={:+.5} σ={:.5} Δ={:+.5} shock={:.3} price={}\n{:?}",
             self.name,
             self.drift,

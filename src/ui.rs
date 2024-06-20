@@ -423,82 +423,89 @@ fn render_night(
         vertical: 1,
     }));
 
-    let cards_split = Layout::horizontal(
-        [Constraint::Length(CARD_WIDTH + 4)].repeat(agent.available_night_events().len()),
-    )
-    .split(v_split[2]);
+    let num_night_events = agent.available_night_events().len();
 
-    for i in 0..agent.available_night_events().len() {
-        // If there is not more than half of the time still available, skip the animation
-        if counter < NIGHT_LENGTH / 2 && ui_options.render_counter < 3 * STONKS_CARDS.len() {
-            frame.render_widget(
-                Paragraph::new(
-                    STONKS_CARDS[(ui_options.render_counter / 3) % STONKS_CARDS.len()].clone(),
-                ),
-                cards_split[i].inner(&Margin {
-                    horizontal: 2,
-                    vertical: 1,
-                }),
-            );
-        } else {
-            if ui_options.selected_event_card.is_some()
-                && ui_options.selected_event_card.unwrap() == i
-            {
-                let border_style = if agent.selected_action().is_some() {
-                    Style::default().green().on_green()
-                } else {
-                    Style::default().red().on_red()
-                };
+    if num_night_events > 0 {
+        let cards_split =
+            Layout::horizontal([Constraint::Length(CARD_WIDTH + 4)].repeat(num_night_events))
+                .split(v_split[2]);
+
+        for i in 0..num_night_events {
+            // If there is not more than half of the time still available, skip the animation
+            if counter < NIGHT_LENGTH / 2 && ui_options.render_counter < 3 * STONKS_CARDS.len() {
                 frame.render_widget(
-                    Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone())
-                        .block(Block::bordered().border_style(border_style)),
+                    Paragraph::new(
+                        STONKS_CARDS[(ui_options.render_counter / 3) % STONKS_CARDS.len()].clone(),
+                    ),
                     cards_split[i].inner(&Margin {
-                        horizontal: 1,
-                        vertical: 0,
+                        horizontal: 2,
+                        vertical: 1,
                     }),
                 );
-                frame.render_widget(
-                    Block::bordered()
-                        .border_style(border_style)
-                        .borders(Borders::RIGHT | Borders::LEFT),
-                    cards_split[i],
-                );
             } else {
-                if agent.selected_action().is_some() {
+                if ui_options.selected_event_card.is_some()
+                    && ui_options.selected_event_card.unwrap() == i
+                {
+                    let border_style = if agent.selected_action().is_some() {
+                        Style::default().green().on_green()
+                    } else {
+                        Style::default().red().on_red()
+                    };
                     frame.render_widget(
-                        Paragraph::new(UNSELECTED_CARD.clone()),
+                        Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone())
+                            .block(Block::bordered().border_style(border_style)),
                         cards_split[i].inner(&Margin {
-                            horizontal: 2,
-                            vertical: 1,
+                            horizontal: 1,
+                            vertical: 0,
                         }),
+                    );
+                    frame.render_widget(
+                        Block::bordered()
+                            .border_style(border_style)
+                            .borders(Borders::RIGHT | Borders::LEFT),
+                        cards_split[i],
                     );
                 } else {
-                    frame.render_widget(
-                        Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone()),
-                        cards_split[i].inner(&Margin {
-                            horizontal: 2,
-                            vertical: 1,
-                        }),
-                    );
+                    if agent.selected_action().is_some() {
+                        frame.render_widget(
+                            Paragraph::new(UNSELECTED_CARD.clone()),
+                            cards_split[i].inner(&Margin {
+                                horizontal: 2,
+                                vertical: 1,
+                            }),
+                        );
+                    } else {
+                        frame.render_widget(
+                            Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone()),
+                            cards_split[i].inner(&Margin {
+                                horizontal: 2,
+                                vertical: 1,
+                            }),
+                        );
+                    }
                 }
+                frame.render_widget(
+                    Paragraph::new(
+                        agent.available_night_events()[i]
+                            .description()
+                            .iter()
+                            .map(|l| Line::from(*l).bold().black())
+                            .collect::<Vec<Line>>(),
+                    )
+                    .centered(),
+                    cards_split[i].inner(&Margin {
+                        horizontal: 3,
+                        vertical: 3,
+                    }),
+                );
             }
-            frame.render_widget(
-                Paragraph::new(
-                    agent.available_night_events()[i]
-                        .description()
-                        .iter()
-                        .map(|l| Line::from(*l).bold().black())
-                        .collect::<Vec<Line>>(),
-                )
-                .centered(),
-                cards_split[i].inner(&Margin {
-                    horizontal: 3,
-                    vertical: 3,
-                }),
-            );
         }
+    } else {
+        frame.render_widget(
+            Paragraph::new("No special events available tonight").centered(),
+            v_split[2],
+        );
     }
-
     frame.render_widget(Paragraph::new(STONKS_LINES.clone()).centered(), v_split[0]);
 
     Ok(())
