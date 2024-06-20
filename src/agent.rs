@@ -1,11 +1,11 @@
+use crate::{market::NUMBER_OF_STONKS, stonk::StonkClass, utils::AppResult};
+use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum_macros::EnumIter;
 
-use crate::{market::NUMBER_OF_STONKS, stonk::StonkClass, utils::AppResult};
+const INITIAL_USER_CASH_CENTS: u32 = 10000 * 100;
 
-const INITIAL_USER_CASH: u32 = 10000;
-
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum AgentAction {
     Buy { stonk_id: usize, amount: u32 },
     Sell { stonk_id: usize, amount: u32 },
@@ -13,7 +13,7 @@ pub enum AgentAction {
     CrashAll,
 }
 
-#[derive(Debug, Clone, Copy, EnumIter)]
+#[derive(Debug, Clone, Copy, EnumIter, Serialize, Deserialize)]
 pub enum NightEvent {
     War,
     ColdWinter,
@@ -96,7 +96,7 @@ pub trait DecisionAgent {
     fn available_night_events(&self) -> &Vec<NightEvent>;
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct UserAgent {
     cash: u32, //in usd cents
     owned_stonks: [u32; NUMBER_OF_STONKS],
@@ -107,7 +107,7 @@ pub struct UserAgent {
 impl UserAgent {
     pub fn new() -> Self {
         Self {
-            cash: INITIAL_USER_CASH * 100, // in cents
+            cash: INITIAL_USER_CASH_CENTS, // in cents
             owned_stonks: [0; NUMBER_OF_STONKS],
             ..Default::default()
         }

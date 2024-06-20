@@ -1,11 +1,12 @@
 use rand::Rng;
 use rand_distr::{Cauchy, Distribution, Normal};
+use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 const MIN_DRIFT: f64 = -0.2;
 const MAX_DRIFT: f64 = -MIN_DRIFT;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum StonkClass {
     Media,
     War,

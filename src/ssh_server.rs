@@ -3,7 +3,7 @@ use crate::market::{GamePhase, Market, StonkMarket, MAX_EVENTS_PER_NIGHT};
 use crate::ssh_backend::SSHBackend;
 use crate::tui::Tui;
 use crate::ui::UiOptions;
-use crate::utils::AppResult;
+use crate::utils::{load_agents, save_agents, AppResult};
 use async_trait::async_trait;
 use crossterm::event::*;
 use rand::seq::SliceRandom;
@@ -26,6 +26,7 @@ const CLIENTS_DROPOUT_TIME_SECONDS: u64 = 60 * 10;
 const PERSISTED_CLIENTS_DROPOUT_TIME_SECONDS: u64 = 60 * 60 * 24;
 const MARKET_TICK_INTERVAL_MILLIS: u64 = 1000;
 const RENDER_INTERVAL_MILLIS: u64 = 50;
+const SAVE_TO_STORE_INTERVAL_MILLIS: u64 = 1000 * 60;
 
 pub fn save_keys(signing_key: &ed25519_dalek::SigningKey) -> AppResult<()> {
     let file = File::create::<&str>("./keys".into())?;
@@ -190,10 +191,13 @@ pub struct AppServer {
 
 impl AppServer {
     pub fn new(market: Market) -> Self {
+        let persisted_agents = load_agents().unwrap_or_default();
+        info!("Loaded {} agents from store", persisted_agents.len());
+
         Self {
             market: Arc::new(Mutex::new(market)),
             clients: Arc::new(Mutex::new(HashMap::new())),
-            persisted_agents: Arc::new(Mutex::new(HashMap::new())),
+            persisted_agents: Arc::new(Mutex::new(persisted_agents)),
             user_id: None,
             id: 0,
         }
@@ -218,6 +222,7 @@ impl AppServer {
 
         tokio::spawn(async move {
             let mut last_market_tick = SystemTime::now();
+            let mut last_save_to_store = SystemTime::now();
             loop {
                 tokio::time::sleep(tokio::time::Duration::from_millis(RENDER_INTERVAL_MILLIS))
                     .await;
@@ -235,6 +240,13 @@ impl AppServer {
                     t.elapsed().expect("Time flows")
                         <= Duration::from_secs(PERSISTED_CLIENTS_DROPOUT_TIME_SECONDS)
                 });
+
+                if last_save_to_store.elapsed().expect("Time flows backwards")
+                    > Duration::from_millis(SAVE_TO_STORE_INTERVAL_MILLIS)
+                {
+                    save_agents(&persisted_agents).expect("Failed to store agents to disk");
+                    last_save_to_store = SystemTime::now();
+                }
 
                 let number_of_players = clients.len();
 

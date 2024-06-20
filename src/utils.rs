@@ -1,11 +1,19 @@
+use crate::agent::UserAgent;
 use image::io::Reader as ImageReader;
 use image::{Pixel, RgbaImage};
 use include_dir::{include_dir, Dir};
 use ratatui::prelude::*;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs::File;
 use std::io::Cursor;
+use std::path::PathBuf;
+use std::time::SystemTime;
 
 pub type AppResult<T> = Result<T, Box<dyn std::error::Error>>;
-pub static ASSETS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/assets/");
+
+static ASSETS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/assets/");
+static AGENTS_STORE_FILENAME: &'static str = "agents.json";
 
 fn read_image(path: &str) -> AppResult<RgbaImage> {
     let file = ASSETS_DIR.get_file(path);
@@ -74,4 +82,38 @@ pub fn img_to_lines<'a>(path: &str) -> AppResult<Vec<Line<'a>>> {
     }
 
     Ok(lines)
+}
+
+fn store_path(filename: &str) -> AppResult<PathBuf> {
+    let dirs = directories::ProjectDirs::from("org", "frittura", "stonks")
+        .ok_or("Failed to get directories")?;
+    let config_dirs = dirs.config_dir();
+    if !config_dirs.exists() {
+        std::fs::create_dir_all(config_dirs)?;
+    }
+    let path = config_dirs.join(filename);
+    Ok(path)
+}
+
+fn save_to_json<T: Serialize>(path: PathBuf, data: &T) -> AppResult<()> {
+    let file = File::create(path)?;
+    assert!(file.metadata()?.is_file());
+    let buffer = std::io::BufWriter::new(file);
+    serde_json::to_writer(buffer, data)?;
+    Ok(())
+}
+
+fn load_from_json<T: for<'a> Deserialize<'a>>(path: PathBuf) -> AppResult<T> {
+    let file = File::open(path)?;
+    let data: T = serde_json::from_reader(file)?;
+    Ok(data)
+}
+
+pub fn save_agents(agents: &HashMap<String, (SystemTime, UserAgent)>) -> AppResult<()> {
+    save_to_json(store_path(AGENTS_STORE_FILENAME)?, agents)?;
+    Ok(())
+}
+
+pub fn load_agents() -> AppResult<HashMap<String, (SystemTime, UserAgent)>> {
+    load_from_json(store_path(AGENTS_STORE_FILENAME)?)
 }
