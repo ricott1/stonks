@@ -5,7 +5,7 @@ use crate::{market::NUMBER_OF_STONKS, stonk::StonkClass, utils::AppResult};
 
 const INITIAL_USER_CASH: u32 = 10000;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AgentAction {
     Buy { stonk_id: usize, amount: u32 },
     Sell { stonk_id: usize, amount: u32 },
@@ -67,15 +67,15 @@ impl NightEvent {
         }
     }
 
-    pub fn action(&self) -> Option<AgentAction> {
+    pub fn action(&self) -> AgentAction {
         match self {
-            Self::War => Some(AgentAction::BumpStonkClass {
+            Self::War => AgentAction::BumpStonkClass {
                 class: StonkClass::War,
-            }),
-            Self::ColdWinter => Some(AgentAction::BumpStonkClass {
+            },
+            Self::ColdWinter => AgentAction::BumpStonkClass {
                 class: StonkClass::Commodity,
-            }),
-            Self::MarketCrash => Some(AgentAction::CrashAll),
+            },
+            Self::MarketCrash => AgentAction::CrashAll,
         }
     }
 }

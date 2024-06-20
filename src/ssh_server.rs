@@ -108,27 +108,27 @@ struct Client {
 impl Client {
     pub fn handle_key_events(&mut self, key_event: KeyEvent, market: &Market) -> AppResult<()> {
         match key_event.code {
-            crossterm::event::KeyCode::Enter | crossterm::event::KeyCode::Backspace => match market
-                .phase
-            {
-                GamePhase::Day { .. } => {
-                    if let Some(_) = self.ui_options.focus_on_stonk {
-                        self.ui_options.reset();
-                    } else {
-                        self.ui_options.select_stonk();
+            crossterm::event::KeyCode::Enter | crossterm::event::KeyCode::Backspace => {
+                match market.phase {
+                    GamePhase::Day { .. } => {
+                        if let Some(_) = self.ui_options.focus_on_stonk {
+                            self.ui_options.reset();
+                        } else {
+                            self.ui_options.select_stonk();
+                        }
                     }
-                }
-                GamePhase::Night { .. } => {
-                    if let Some(idx) = self.ui_options.selected_event_card {
-                        if idx < self.agent.available_night_events().len() {
-                            if let Some(action) = self.agent.available_night_events()[idx].action()
-                            {
-                                self.agent.select_action(action);
+                    GamePhase::Night { .. } => {
+                        if self.agent.selected_action().is_none() {
+                            if let Some(idx) = self.ui_options.selected_event_card {
+                                if idx < self.agent.available_night_events().len() {
+                                    let action = self.agent.available_night_events()[idx].action();
+                                    self.agent.select_action(action);
+                                }
                             }
                         }
                     }
                 }
-            },
+            }
 
             KeyCode::Char('b') => {
                 if let Some(stonk_id) = self.ui_options.focus_on_stonk {

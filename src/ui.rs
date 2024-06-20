@@ -443,36 +443,51 @@ fn render_night(
                     }),
                 );
             } else {
-                if ui_options.selected_event_card.is_some()
-                    && ui_options.selected_event_card.unwrap() == i
-                {
-                    let border_style = if agent.selected_action().is_some() {
-                        Style::default().green().on_green()
+                let selected_event = agent.available_night_events()[i];
+                if agent.selected_action().is_some() {
+                    if agent.selected_action().unwrap() == selected_event.action() {
+                        let border_style = Style::default().green().on_green();
+                        frame.render_widget(
+                            Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone())
+                                .block(Block::bordered().border_style(border_style)),
+                            cards_split[i].inner(&Margin {
+                                horizontal: 1,
+                                vertical: 0,
+                            }),
+                        );
+                        frame.render_widget(
+                            Block::bordered()
+                                .border_style(border_style)
+                                .borders(Borders::RIGHT | Borders::LEFT),
+                            cards_split[i],
+                        );
                     } else {
-                        Style::default().red().on_red()
-                    };
-                    frame.render_widget(
-                        Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone())
-                            .block(Block::bordered().border_style(border_style)),
-                        cards_split[i].inner(&Margin {
-                            horizontal: 1,
-                            vertical: 0,
-                        }),
-                    );
-                    frame.render_widget(
-                        Block::bordered()
-                            .border_style(border_style)
-                            .borders(Borders::RIGHT | Borders::LEFT),
-                        cards_split[i],
-                    );
-                } else {
-                    if agent.selected_action().is_some() {
                         frame.render_widget(
                             Paragraph::new(UNSELECTED_CARD.clone()),
                             cards_split[i].inner(&Margin {
                                 horizontal: 2,
                                 vertical: 1,
                             }),
+                        );
+                    }
+                } else {
+                    if ui_options.selected_event_card.is_some()
+                        && ui_options.selected_event_card.unwrap() == i
+                    {
+                        let border_style = Style::default().red().on_red();
+                        frame.render_widget(
+                            Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone())
+                                .block(Block::bordered().border_style(border_style)),
+                            cards_split[i].inner(&Margin {
+                                horizontal: 1,
+                                vertical: 0,
+                            }),
+                        );
+                        frame.render_widget(
+                            Block::bordered()
+                                .border_style(border_style)
+                                .borders(Borders::RIGHT | Borders::LEFT),
+                            cards_split[i],
                         );
                     } else {
                         frame.render_widget(
@@ -486,7 +501,7 @@ fn render_night(
                 }
                 frame.render_widget(
                     Paragraph::new(
-                        agent.available_night_events()[i]
+                        selected_event
                             .description()
                             .iter()
                             .map(|l| Line::from(*l).bold().black())
