@@ -1,19 +1,21 @@
 use crate::agent::{AgentAction, DecisionAgent, NightEvent, UserAgent};
-use crate::market::{GamePhase, Market, StonkMarket, MAX_EVENTS_PER_NIGHT};
+use crate::market::{GamePhase, Market, StonkMarket, HISTORICAL_SIZE, MAX_EVENTS_PER_NIGHT};
 use crate::ssh_backend::SSHBackend;
 use crate::tui::Tui;
 use crate::ui::UiOptions;
-use crate::utils::{load_agents, save_agents, AppResult};
+use crate::utils::{load_agents, load_market, save_agents, save_market, AppResult};
 use async_trait::async_trait;
 use crossterm::event::*;
 use rand::seq::SliceRandom;
-use rand::Rng;
+use rand::{Rng, RngCore, SeedableRng};
+use rand_chacha::ChaCha8Rng;
 use rand_distr::Alphanumeric;
 use russh::{server::*, Channel, ChannelId, CryptoVec, Disconnect, Pty};
 use russh_keys::key::PublicKey;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fs::File;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::{Read, Write};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -21,12 +23,20 @@ use strum::IntoEnumIterator;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info};
 
+pub type Password = u64;
+pub type AgentsDatabase = HashMap<String, (SystemTime, UserAgent)>;
+
 const SERVER_SSH_PORT: u16 = 3333;
 const CLIENTS_DROPOUT_TIME_SECONDS: u64 = 60 * 10;
 const PERSISTED_CLIENTS_DROPOUT_TIME_SECONDS: u64 = 60 * 60 * 24;
 const MARKET_TICK_INTERVAL_MILLIS: u64 = 1000;
 const RENDER_INTERVAL_MILLIS: u64 = 50;
-const SAVE_TO_STORE_INTERVAL_MILLIS: u64 = 1000 * 60;
+const SAVE_TO_STORE_INTERVAL_SECONDS: u64 = 6;
+const MIN_USER_LENGTH: usize = 3;
+const MAX_USER_LENGTH: usize = 16;
+
+static AUTH_PASSWORD_SALT: &'static str = "gbasfhgE4Fvb";
+static AUTH_PUBLIC_KEY_SALT: &'static str = "fa2RR4fq9XX9";
 
 pub fn save_keys(signing_key: &ed25519_dalek::SigningKey) -> AppResult<()> {
     let file = File::create::<&str>("./keys".into())?;
@@ -132,44 +142,60 @@ impl Client {
             }
 
             KeyCode::Char('b') => {
-                if let Some(stonk_id) = self.ui_options.focus_on_stonk {
-                    let amount = if key_event.modifiers == KeyModifiers::SHIFT {
-                        100
-                    } else {
-                        1
-                    };
-                    self.agent
-                        .select_action(AgentAction::Buy { stonk_id, amount })
+                let stonk_id = if let Some(stonk_id) = self.ui_options.focus_on_stonk {
+                    stonk_id
+                } else {
+                    self.ui_options.selected_stonk_index
+                };
+
+                let stonk = &market.stonks[stonk_id];
+                let amount = if key_event.modifiers == KeyModifiers::SHIFT {
+                    100
+                } else {
+                    1
                 }
+                .min(stonk.available_amount());
+
+                self.agent
+                    .select_action(AgentAction::Buy { stonk_id, amount })
             }
 
             KeyCode::Char('m') => {
-                if let Some(stonk_id) = self.ui_options.focus_on_stonk {
-                    let stonk = &market.stonks[stonk_id];
-                    let amount = self.agent.cash() / stonk.buy_price();
-                    self.agent
-                        .select_action(AgentAction::Buy { stonk_id, amount })
-                }
+                let stonk_id = if let Some(stonk_id) = self.ui_options.focus_on_stonk {
+                    stonk_id
+                } else {
+                    self.ui_options.selected_stonk_index
+                };
+                let stonk = &market.stonks[stonk_id];
+                let amount = (self.agent.cash() / stonk.buy_price()).min(stonk.available_amount());
+                self.agent
+                    .select_action(AgentAction::Buy { stonk_id, amount })
             }
 
             KeyCode::Char('s') => {
-                if let Some(stonk_id) = self.ui_options.focus_on_stonk {
-                    let amount = if key_event.modifiers == KeyModifiers::SHIFT {
-                        100
-                    } else {
-                        1
-                    };
-                    self.agent
-                        .select_action(AgentAction::Sell { stonk_id, amount })
-                }
+                let stonk_id = if let Some(stonk_id) = self.ui_options.focus_on_stonk {
+                    stonk_id
+                } else {
+                    self.ui_options.selected_stonk_index
+                };
+                let amount = if key_event.modifiers == KeyModifiers::SHIFT {
+                    100
+                } else {
+                    1
+                };
+                self.agent
+                    .select_action(AgentAction::Sell { stonk_id, amount })
             }
 
             KeyCode::Char('d') => {
-                if let Some(stonk_id) = self.ui_options.focus_on_stonk {
-                    let amount = self.agent.owned_stonks()[stonk_id];
-                    self.agent
-                        .select_action(AgentAction::Sell { stonk_id, amount })
-                }
+                let stonk_id = if let Some(stonk_id) = self.ui_options.focus_on_stonk {
+                    stonk_id
+                } else {
+                    self.ui_options.selected_stonk_index
+                };
+                let amount = self.agent.owned_stonks()[stonk_id];
+                self.agent
+                    .select_action(AgentAction::Sell { stonk_id, amount })
             }
 
             key_code => {
@@ -180,27 +206,24 @@ impl Client {
     }
 }
 
+#[derive(Clone, Debug)]
+struct SessionAuth {
+    username: String,
+    hashed_password: u64,
+}
+
 #[derive(Clone)]
 pub struct AppServer {
     market: Arc<Mutex<Market>>,
     clients: Arc<Mutex<HashMap<usize, Client>>>,
-    persisted_agents: Arc<Mutex<HashMap<String, (SystemTime, UserAgent)>>>,
-    user_id: Option<String>,
+    persisted_agents: Arc<Mutex<AgentsDatabase>>,
+    session_auth: Option<SessionAuth>,
     id: usize,
 }
 
 impl AppServer {
-    pub fn new(market: Market) -> Self {
-        let persisted_agents = load_agents().unwrap_or_default();
-        info!("Loaded {} agents from store", persisted_agents.len());
-
-        Self {
-            market: Arc::new(Mutex::new(market)),
-            clients: Arc::new(Mutex::new(HashMap::new())),
-            persisted_agents: Arc::new(Mutex::new(persisted_agents)),
-            user_id: None,
-            id: 0,
-        }
+    fn check_agent_password(agent: &UserAgent, password: u64) -> bool {
+        agent.password == password
     }
 
     fn generate_user_id() -> String {
@@ -212,6 +235,41 @@ impl AppServer {
         std::str::from_utf8(buf_id.as_slice())
             .expect("Failed to generate user id string")
             .to_string()
+    }
+    pub fn new(reset: bool, seed: Option<u64>) -> AppResult<Self> {
+        let market = if reset {
+            info!("Creating new market from scratch");
+            let mut m = Market::default();
+            let rng = &mut ChaCha8Rng::seed_from_u64(
+                seed.unwrap_or(ChaCha8Rng::from_entropy().next_u64()),
+            );
+            loop {
+                m.tick_day(rng);
+                if m.last_tick >= HISTORICAL_SIZE {
+                    break;
+                }
+            }
+            save_market(&m)?;
+            m
+        } else {
+            load_market().unwrap_or_default()
+        };
+        let persisted_agents = if reset {
+            let agents = AgentsDatabase::default();
+            save_agents(&agents)?;
+            agents
+        } else {
+            load_agents().unwrap_or_default()
+        };
+        info!("Loaded {} agents from store", persisted_agents.len());
+
+        Ok(Self {
+            market: Arc::new(Mutex::new(market)),
+            clients: Arc::new(Mutex::new(HashMap::new())),
+            persisted_agents: Arc::new(Mutex::new(persisted_agents)),
+            session_auth: None,
+            id: 0,
+        })
     }
 
     pub async fn run(&mut self) -> AppResult<()> {
@@ -236,15 +294,28 @@ impl AppServer {
                         <= Duration::from_secs(CLIENTS_DROPOUT_TIME_SECONDS)
                 });
 
-                persisted_agents.retain(|_, (t, _)| {
-                    t.elapsed().expect("Time flows")
-                        <= Duration::from_secs(PERSISTED_CLIENTS_DROPOUT_TIME_SECONDS)
-                });
-
+                // Persist to disk
                 if last_save_to_store.elapsed().expect("Time flows backwards")
-                    > Duration::from_millis(SAVE_TO_STORE_INTERVAL_MILLIS)
+                    > Duration::from_secs(SAVE_TO_STORE_INTERVAL_SECONDS)
                 {
-                    save_agents(&persisted_agents).expect("Failed to store agents to disk");
+                    // Drop agents and release their stocks.
+                    for (_, (t, agent)) in persisted_agents.iter() {
+                        if t.elapsed().expect("Time flows backwards")
+                            <= Duration::from_secs(PERSISTED_CLIENTS_DROPOUT_TIME_SECONDS)
+                        {
+                            for stonk in market.stonks.iter_mut() {
+                                if stonk.release_agent_stonks(agent).is_err() {
+                                    println!("Failed to release agent stonks");
+                                }
+                            }
+                        }
+                    }
+                    persisted_agents.retain(|_, (t, _)| {
+                        t.elapsed().expect("Time flows")
+                            <= Duration::from_secs(PERSISTED_CLIENTS_DROPOUT_TIME_SECONDS)
+                    });
+
+                    save_market(&market).expect("Failed to store agents to disk");
                     last_save_to_store = SystemTime::now();
                 }
 
@@ -255,16 +326,22 @@ impl AppServer {
                         GamePhase::Day { .. } => {
                             client.ui_options.render_counter = 0;
                             client.ui_options.selected_event_card = None;
-                            market
-                                .apply_agent_action::<UserAgent>(&mut client.agent)
-                                .unwrap_or_else(|e| {
-                                    error!("Could not apply agent {} action: {}", id, e)
-                                });
+                            if let Some(_) = client.agent.selected_action() {
+                                market
+                                    .apply_agent_action::<UserAgent>(&mut client.agent)
+                                    .unwrap_or_else(|e| {
+                                        error!("Could not apply agent {} action: {}", id, e)
+                                    });
+                                save_agents(&persisted_agents)
+                                    .unwrap_or_else(|_| error!("Could not store agents to disk"));
+                            }
                         }
                         GamePhase::Night { .. } => {
                             // At the beginning of the night, set the available events.
                             // We set them here because we need the market data.
-                            if client.ui_options.render_counter == 0 {
+                            if client.ui_options.render_counter == 0
+                                && client.agent.available_night_events().len() == 0
+                            {
                                 let mut events = NightEvent::iter()
                                     .filter(|e| e.condition()(&client.agent))
                                     .collect::<Vec<NightEvent>>();
@@ -350,34 +427,66 @@ impl Handler for AppServer {
         session: &mut Session,
     ) -> Result<bool, Self::Error> {
         {
+            // Check SessionAuth validity
+            let session_auth = self
+                .session_auth
+                .as_ref()
+                .expect("Session auth should be set");
+
+            info!("User connected with {:?}", session_auth);
+            let mut persisted_agents = self.persisted_agents.lock().await;
+
+            // If session_auth.username is in the persisted agents db, we check the password
+            let agent = if let Some((_, db_agent)) = persisted_agents.get(&session_auth.username) {
+                if Self::check_agent_password(db_agent, session_auth.hashed_password) == false {
+                    let error_string = format!("\n\rWrong password.\n");
+                    session.disconnect(Disconnect::ByApplication, error_string.as_str(), "");
+                    session.close(channel.id());
+                    return Ok(false);
+                }
+                db_agent.clone()
+            }
+            // Else, we check the username and persist it
+            else {
+                if session_auth.username.len() < MIN_USER_LENGTH
+                    || session_auth.username.len() > MAX_USER_LENGTH
+                {
+                    let error_string = format!(
+                        "\n\rInvalid username. The username must have between {} and {} characters.\n",
+                        MIN_USER_LENGTH, MAX_USER_LENGTH
+                    );
+                    session.disconnect(Disconnect::ByApplication, error_string.as_str(), "");
+                    session.close(channel.id());
+                    return Ok(false);
+                }
+                let new_agent =
+                    UserAgent::new(session_auth.username.clone(), session_auth.hashed_password);
+
+                new_agent
+            };
+
             let mut clients = self.clients.lock().await;
+
             let terminal_handle = TerminalHandle {
                 handle: session.handle(),
                 sink: Vec::new(),
                 channel_id: channel.id(),
             };
 
-            // let events = EventHandler::handler(false);
             let backend = SSHBackend::new(terminal_handle, (160, 48));
-
             let mut tui = Tui::new(backend)
                 .map_err(|e| anyhow::anyhow!("Failed to create terminal interface: {}", e))?;
             tui.terminal
                 .clear()
                 .map_err(|e| anyhow::anyhow!("Failed to clear terminal: {}", e))?;
 
-            let persisted_agents = self.persisted_agents.lock().await;
-
-            let user_id = self.user_id.clone().expect("User id should be set");
-            let agent = persisted_agents
-                .get(&user_id)
-                .expect("Agent should be persisted")
-                .clone()
-                .1;
+            persisted_agents.insert(agent.username.clone(), (SystemTime::now(), agent.clone()));
+            save_agents(&persisted_agents)
+                .map_err(|e| anyhow::anyhow!("Failed to store agents to disk: {}", e))?;
 
             let client = Client {
                 tui,
-                ui_options: UiOptions::new(user_id),
+                ui_options: UiOptions::new(),
                 last_action: SystemTime::now(),
                 agent,
             };
@@ -388,21 +497,27 @@ impl Handler for AppServer {
         Ok(true)
     }
 
-    // async fn auth_none(&mut self, _: &str) -> Result<Auth, Self::Error> {
-    //     Ok(Auth::Accept)
-    // }
-
-    async fn auth_password(&mut self, user: &str, _password: &str) -> Result<Auth, Self::Error> {
-        let mut persisted_agents = self.persisted_agents.lock().await;
-
-        if persisted_agents.get(user).is_none() {
-            let agent = UserAgent::new();
-            let new_user = Self::generate_user_id();
-            persisted_agents.insert(new_user.to_string(), (SystemTime::now(), agent));
-            self.user_id = Some(new_user);
+    async fn auth_password(&mut self, user: &str, password: &str) -> Result<Auth, Self::Error> {
+        let persisted_agents = self.persisted_agents.lock().await;
+        let username = if let Some((_, agent)) = persisted_agents.get(user) {
+            agent.username.clone()
+        } else if user.len() == 0 {
+            Self::generate_user_id()
         } else {
-            self.user_id = Some(user.to_string());
-        }
+            user.to_string()
+        };
+
+        let mut hasher = DefaultHasher::new();
+        let salted_password = format!("{}{}", password, AUTH_PASSWORD_SALT);
+        salted_password.hash(&mut hasher);
+        let hashed_password = hasher.finish();
+
+        // We defer checking username and password to channel_open_session so that it is possible
+        // to send informative error messages to the user using session.write.
+        self.session_auth = Some(SessionAuth {
+            username,
+            hashed_password,
+        });
 
         Ok(Auth::Accept)
     }
@@ -410,18 +525,28 @@ impl Handler for AppServer {
     async fn auth_publickey(
         &mut self,
         user: &str,
-        _public_key: &PublicKey,
+        public_key: &PublicKey,
     ) -> Result<Auth, Self::Error> {
-        let mut persisted_agents = self.persisted_agents.lock().await;
-
-        if persisted_agents.get(user).is_none() {
-            let agent = UserAgent::new();
-            let new_user = Self::generate_user_id();
-            persisted_agents.insert(new_user.to_string(), (SystemTime::now(), agent));
-            self.user_id = Some(new_user);
+        let persisted_agents = self.persisted_agents.lock().await;
+        let username = if let Some((_, agent)) = persisted_agents.get(user) {
+            agent.username.clone()
+        } else if user.len() == 0 {
+            Self::generate_user_id()
         } else {
-            self.user_id = Some(user.to_string());
-        }
+            user.to_string()
+        };
+
+        let mut hasher = DefaultHasher::new();
+        let salted_password = format!("{}{}", public_key.fingerprint(), AUTH_PUBLIC_KEY_SALT);
+        salted_password.hash(&mut hasher);
+        let hashed_password = hasher.finish();
+
+        // We defer checking username and password to channel_open_session so that it is possible
+        // to send informative error messages to the user using session.write.
+        self.session_auth = Some(SessionAuth {
+            username,
+            hashed_password,
+        });
 
         Ok(Auth::Accept)
     }
@@ -458,10 +583,9 @@ impl Handler for AppServer {
                         client
                             .handle_key_events(key_event, &market)
                             .map_err(|e| anyhow::anyhow!("Error: {}", e))?;
-                        persisted_agents.insert(
-                            client.ui_options.user_id.clone(),
-                            (now, client.agent.clone()),
-                        );
+                        let mut db_agent = client.agent.clone();
+                        db_agent.clear_action();
+                        persisted_agents.insert(client.agent.username.clone(), (now, db_agent));
                         client
                             .tui
                             .draw(

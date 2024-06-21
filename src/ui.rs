@@ -116,10 +116,9 @@ impl ZoomLevel {
 
 #[derive(Debug, Clone)]
 pub struct UiOptions {
-    pub user_id: String,
     pub focus_on_stonk: Option<usize>,
     display: UiDisplay,
-    selected_stonk_index: usize,
+    pub selected_stonk_index: usize,
     palette_index: usize,
     zoom_level: ZoomLevel,
     pub render_counter: usize,
@@ -127,9 +126,8 @@ pub struct UiOptions {
 }
 
 impl UiOptions {
-    pub fn new(user_id: String) -> Self {
+    pub fn new() -> Self {
         UiOptions {
-            user_id,
             focus_on_stonk: None,
             display: UiDisplay::Stonks,
             selected_stonk_index: 0,
@@ -229,8 +227,9 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
         "Sell $",
         "Today +/-",
         "Max +/-",
-        "Owned",
+        "Stake",
         "Value",
+        "Top Shareholders",
     ]
     .into_iter()
     .map(Cell::from)
@@ -314,7 +313,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
             Style::default()
         };
 
-        let agent_share = agent.owned_stonks()[stonk.id] as f64 / stonk.number_of_shares as f64;
+        let agent_share = stonk.to_stake(agent);
 
         let agent_style = if agent_share >= 5.0 {
             Style::default().magenta()
@@ -344,8 +343,14 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
             Cell::new(format!("\n${:.2}", stonk.formatted_sell_price())).style(style),
             Cell::new(format!("\n{:+.2}%", today_variation)).style(today_style),
             Cell::new(format!("\n{:+.2}%", max_variation)).style(max_style),
-            Cell::new(format!("\n{:.2}%", agent_share)).style(agent_style),
+            Cell::new(format!("\n{:.2}%", agent_share * 100.0)).style(agent_style),
             Cell::new(format!("\n${}", agent_stonk_value)).style(agent_stonk_style),
+            Cell::new(vec![
+                Line::from(format!("${}", agent_stonk_value)),
+                Line::from(format!("${}", agent_stonk_value)),
+                Line::from(format!("${}", agent_stonk_value)),
+            ])
+            .style(agent_stonk_style),
         ])
         .style(Style::new().fg(colors.row_fg).bg(color))
         .height(3)
@@ -361,6 +366,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
             Constraint::Length(10),
             Constraint::Length(10),
             Constraint::Length(10),
+            Constraint::Length(20),
         ],
     )
     .header(header)
@@ -446,6 +452,7 @@ fn render_night(
                 let selected_event = agent.available_night_events()[i];
                 if agent.selected_action().is_some() {
                     if agent.selected_action().unwrap() == selected_event.action() {
+                        //this check fails
                         let border_style = Style::default().green().on_green();
                         frame.render_widget(
                             Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone())
@@ -586,7 +593,7 @@ fn render_stonk(
 
     let datasets = vec![Dataset::default()
         .graph_type(GraphType::Line)
-        .marker(symbols::Marker::HalfBlock)
+        .marker(symbols::Marker::Braille)
         .style(styles[stonk.id])
         .data(&datas)];
 
@@ -688,16 +695,16 @@ fn render_header(
                 let amount = agent.owned_stonks()[stonk_id];
                 let stonk = &market.stonks[stonk_id];
                 format!(
-                    "Owned shares {} ({:.03}%) ",
+                    "Owned shares {} ({:.02}%) ",
                     amount,
-                    (amount as f64 / stonk.number_of_shares as f64)
+                    stonk.to_stake(agent) * 100.0
                 )
             } else {
                 format!(
                     "{} player{} online - `ssh {}@frittura.org -p 3333`",
                     number_of_players,
                     if number_of_players > 1 { "s" } else { "" },
-                    ui_options.user_id
+                    agent.username
                 )
             }
         }
@@ -706,7 +713,7 @@ fn render_header(
                 "{} player{} online - `ssh {}@frittura.org -p 3333`",
                 number_of_players,
                 if number_of_players > 1 { "s" } else { "" },
-                ui_options.user_id
+                agent.username
             )
         }
     };
@@ -731,7 +738,7 @@ fn render_footer(
 
     match market.phase {
         GamePhase::Day { .. } => {
-            if let Some(stonk_id) = ui_options.focus_on_stonk {
+            if let Some(_) = ui_options.focus_on_stonk {
                 lines.push(
                     format!(
                         "{:28} {:28} {:28}",
@@ -739,52 +746,53 @@ fn render_footer(
                     )
                     .into(),
                 );
-
-                let stonk = &market.stonks[stonk_id];
-
-                let max_buy_amount = agent.cash() / stonk.buy_price();
-                lines.push(
-                    format!(
-                        "{:28} {:28} {:28}",
-                        format!("`b`: buy  x1 (${:.2})", stonk.formatted_buy_price()),
-                        format!(
-                            "`B`: buy  x100 (${:.2})",
-                            100.0 * stonk.formatted_buy_price()
-                        ),
-                        format!(
-                            "`m`: buy  x{} (${:.2})",
-                            max_buy_amount,
-                            max_buy_amount as f64 * stonk.formatted_buy_price()
-                        ),
-                    )
-                    .into(),
-                );
-                let owned_amount = agent.owned_stonks()[stonk.id];
-                lines.push(
-                    format!(
-                        "{:28} {:28} {:28}",
-                        format!("`s`: sell x1 (${:.2})", stonk.formatted_sell_price()),
-                        format!(
-                            "`S`: sell x100 (${:.2})",
-                            100.0 * stonk.formatted_sell_price()
-                        ),
-                        format!(
-                            "`d`: sell x{} (${:.2})",
-                            owned_amount,
-                            owned_amount as f64 * stonk.formatted_sell_price()
-                        ),
-                    )
-                    .into(),
-                );
             } else {
                 lines.push(
-                    format!(
-                        "{:28} {:28}",
-                        "`↑↓`:select stonk", "`return`:focus on stonk",
-                    )
-                    .into(),
+                    format!("{:28} {:28}", "`↑↓`:select stonk", "`return`:show graph",).into(),
                 );
             }
+
+            let stonk_id = if let Some(stonk_id) = ui_options.focus_on_stonk {
+                stonk_id
+            } else {
+                ui_options.selected_stonk_index
+            };
+            let stonk = &market.stonks[stonk_id];
+
+            let max_buy_amount = agent.cash() / stonk.buy_price();
+            lines.push(
+                format!(
+                    "{:28} {:28} {:28}",
+                    format!("`b`: buy  x1 (${:.2})", stonk.formatted_buy_price()),
+                    format!(
+                        "`B`: buy  x100 (${:.2})",
+                        100.0 * stonk.formatted_buy_price()
+                    ),
+                    format!(
+                        "`m`: buy  x{} (${:.2})",
+                        max_buy_amount,
+                        max_buy_amount as f64 * stonk.formatted_buy_price()
+                    ),
+                )
+                .into(),
+            );
+            let owned_amount = agent.owned_stonks()[stonk.id];
+            lines.push(
+                format!(
+                    "{:28} {:28} {:28}",
+                    format!("`s`: sell x1 (${:.2})", stonk.formatted_sell_price()),
+                    format!(
+                        "`S`: sell x100 (${:.2})",
+                        100.0 * stonk.formatted_sell_price()
+                    ),
+                    format!(
+                        "`d`: sell x{} (${:.2})",
+                        owned_amount,
+                        owned_amount as f64 * stonk.formatted_sell_price()
+                    ),
+                )
+                .into(),
+            );
         }
         GamePhase::Night { .. } => {
             if let Some(action) = agent.selected_action() {

@@ -3,7 +3,10 @@ use crate::{
     stonk::{Stonk, StonkClass, StonkCondition},
     utils::AppResult,
 };
-use rand::Rng;
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaCha8Rng;
+use serde::{Deserialize, Serialize};
+use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::{debug, info};
 
 const DAY_STARTING_HOUR: usize = 6;
@@ -19,70 +22,79 @@ pub const NIGHT_LENGTH: usize = TICKS_PER_HOUR * NIGHT_LENGTH_HOURS; // NIGHT_LE
 
 // We keep record of the last 12 weeks
 pub const HISTORICAL_SIZE: usize = DAY_LENGTH * 7 * 12;
-
 pub const NUMBER_OF_STONKS: usize = 8;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Display, EnumIter)]
+enum Season {
+    Spring,
+    Summer,
+    Fall,
+    Winter,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum GamePhase {
     Day { cycle: usize, counter: usize },
     Night { cycle: usize, counter: usize },
 }
 
 impl GamePhase {
-    fn formatted_time(&self) -> String {
+    fn time(&self) -> (usize, usize) {
         match self {
-            Self::Day { counter, .. } => {
-                format!(
-                    "{:02}:{:02}",
-                    (DAY_STARTING_HOUR + counter / TICKS_PER_HOUR) % 24,
-                    (counter % TICKS_PER_HOUR) * 15
-                )
-            }
-            Self::Night { counter, .. } => {
-                format!(
-                    "{:02}:{:02}",
-                    (DAY_STARTING_HOUR + DAY_LENGTH_HOURS + counter / TICKS_PER_HOUR) % 24,
-                    (counter % TICKS_PER_HOUR) * 15
-                )
-            }
+            Self::Day { counter, .. } => (
+                (DAY_STARTING_HOUR + counter / TICKS_PER_HOUR) % 24,
+                (counter % TICKS_PER_HOUR) * 15,
+            ),
+            Self::Night { counter, .. } => (
+                (DAY_STARTING_HOUR + DAY_LENGTH_HOURS + counter / TICKS_PER_HOUR) % 24,
+                (counter % TICKS_PER_HOUR) * 15,
+            ),
         }
     }
 
-    fn season(&self) -> &str {
-        let seasons = ["Spring", "Summer", "Fall", "Winter"];
+    fn season(&self) -> Season {
+        let seasons = Season::iter().collect::<Vec<Season>>();
         match self {
             Self::Day { cycle, .. } => seasons[(cycle / 90) % 4],
             Self::Night { cycle, .. } => seasons[(cycle / 90) % 4],
         }
     }
 
-    fn year(&self) -> String {
+    fn year(&self) -> usize {
         match self {
-            Self::Day { cycle, .. } => (cycle / 90 / 4).to_string(),
-            Self::Night { cycle, .. } => (cycle / 90 / 4).to_string(),
+            Self::Day { cycle, .. } => cycle / 90 / 4 + 1,
+            Self::Night { cycle, .. } => cycle / 90 / 4 + 1,
         }
     }
 
     pub fn formatted(&self) -> String {
+        let time = self.time();
         format!(
-            "{:6} {} {}",
+            "{:6} {} {:02}:{:02}",
             self.season(),
             self.year(),
-            self.formatted_time()
+            time.0,
+            time.1
         )
     }
 }
 
-pub trait StonkMarket {
+pub trait StonkMarket: Default {
     fn tick(&mut self);
     fn apply_agent_action<A: DecisionAgent>(&mut self, agent: &mut A) -> AppResult<()>;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Market {
     pub stonks: [Stonk; NUMBER_OF_STONKS],
     pub last_tick: usize,
     pub phase: GamePhase,
+}
+
+impl Default for Market {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Market {
@@ -178,7 +190,7 @@ impl Market {
             ),
         ];
 
-        let mut m = Market {
+        let m = Market {
             stonks,
             last_tick: 0,
             phase: GamePhase::Day {
@@ -187,19 +199,7 @@ impl Market {
             },
         };
 
-        loop {
-            m.tick();
-            match m.phase {
-                GamePhase::Day { cycle, .. } => {
-                    if cycle >= HISTORICAL_SIZE / DAY_LENGTH {
-                        break;
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        debug!("Starting market at {:?}", m.phase);
+        debug!("Started Market with {} stonks!", m.stonks.len());
 
         m
     }
@@ -228,8 +228,7 @@ impl Market {
         )
     }
 
-    pub fn tick_day(&mut self) {
-        let rng = &mut rand::thread_rng();
+    pub fn tick_day(&mut self, rng: &mut ChaCha8Rng) {
         let global_drift = if self.last_tick % DAY_LENGTH == 0 {
             Some(rng.gen_range(-0.01..0.01))
         } else {
@@ -250,17 +249,16 @@ impl Market {
         self.last_tick += 1;
     }
 
-    fn tick_night(&mut self) {
-        // let rng = &mut rand::thread_rng();
-    }
+    fn tick_night(&mut self, _rng: &mut ChaCha8Rng) {}
 }
 
 impl StonkMarket for Market {
     fn tick(&mut self) {
         debug!("\nMarket tick {:?}", self.phase);
+        let rng = &mut ChaCha8Rng::from_entropy();
         match self.phase {
             GamePhase::Day { cycle, counter } => {
-                self.tick_day();
+                self.tick_day(rng);
                 if counter < DAY_LENGTH - 1 {
                     self.phase = GamePhase::Day {
                         cycle,
@@ -271,7 +269,7 @@ impl StonkMarket for Market {
                 }
             }
             GamePhase::Night { cycle, counter } => {
-                self.tick_night();
+                self.tick_night(rng);
                 if counter < NIGHT_LENGTH - 1 {
                     self.phase = GamePhase::Night {
                         cycle,
@@ -294,20 +292,27 @@ impl StonkMarket for Market {
             match action {
                 AgentAction::Buy { stonk_id, amount } => {
                     let stonk = &mut self.stonks[stonk_id];
-                    if stonk.number_of_shares == stonk.allocated_shares {
-                        return Err("No more shares available".into());
+                    let max_amount = stonk.available_amount();
+                    if max_amount < amount {
+                        return Err("Not enough shares available".into());
                     }
                     let cost = stonk.buy_price() * amount;
                     agent.sub_cash(cost)?;
                     agent.add_stonk(stonk_id, amount)?;
                     stonk.allocated_shares += amount;
-                    let bump_amount = amount as f64 / stonk.number_of_shares as f64;
+                    let bump_amount = stonk.to_stake(agent);
                     stonk.add_condition(
                         StonkCondition::Bump {
                             amount: bump_amount,
                         },
                         self.last_tick + 1,
                     );
+                    println!(
+                        "Buy action: amount={}, allocated={},available={}",
+                        amount,
+                        stonk.allocated_shares,
+                        stonk.available_amount()
+                    )
                 }
                 AgentAction::Sell { stonk_id, amount } => {
                     let stonk = &mut self.stonks[stonk_id];
@@ -315,13 +320,19 @@ impl StonkMarket for Market {
                     agent.sub_stonk(stonk_id, amount)?;
                     agent.add_cash(cost)?;
                     stonk.allocated_shares -= amount;
-                    let bump_amount = amount as f64 / stonk.number_of_shares as f64;
+                    let bump_amount = stonk.to_stake(agent);
                     stonk.add_condition(
                         StonkCondition::Bump {
                             amount: -bump_amount,
                         },
                         self.last_tick + 1,
                     );
+                    println!(
+                        "Sell action: amount={}, allocated={},available={}",
+                        amount,
+                        stonk.allocated_shares,
+                        stonk.available_amount()
+                    )
                 }
                 AgentAction::BumpStonkClass { class } => {
                     for stonk in self.stonks.iter_mut().filter(|s| s.class == class) {

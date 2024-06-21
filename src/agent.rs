@@ -1,4 +1,4 @@
-use crate::{market::NUMBER_OF_STONKS, stonk::StonkClass, utils::AppResult};
+use crate::{market::NUMBER_OF_STONKS, ssh_server::Password, stonk::StonkClass, utils::AppResult};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum_macros::EnumIter;
@@ -13,7 +13,7 @@ pub enum AgentAction {
     CrashAll,
 }
 
-#[derive(Debug, Clone, Copy, EnumIter, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, EnumIter, PartialEq, Serialize, Deserialize)]
 pub enum NightEvent {
     War,
     ColdWinter,
@@ -98,6 +98,8 @@ pub trait DecisionAgent {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct UserAgent {
+    pub username: String,
+    pub password: Password,
     cash: u32, //in usd cents
     owned_stonks: [u32; NUMBER_OF_STONKS],
     pending_action: Option<AgentAction>,
@@ -105,8 +107,10 @@ pub struct UserAgent {
 }
 
 impl UserAgent {
-    pub fn new() -> Self {
+    pub fn new(username: String, password: Password) -> Self {
         Self {
+            username,
+            password,
             cash: INITIAL_USER_CASH_CENTS, // in cents
             owned_stonks: [0; NUMBER_OF_STONKS],
             ..Default::default()

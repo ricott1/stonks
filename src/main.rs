@@ -1,6 +1,16 @@
-use stonks::{market::Market, ssh_server::AppServer, utils::AppResult};
-use tracing::{debug, metadata::LevelFilter};
+use clap::{ArgAction, Parser};
+use stonks::{ssh_server::AppServer, utils::AppResult};
+use tracing::metadata::LevelFilter;
 use tracing_subscriber::EnvFilter;
+
+#[derive(Parser, Debug)]
+#[clap(name="Stonks", about = "Get rich or stonk tryin'", author, version, long_about = None)]
+struct Args {
+    #[clap(long, short = 's', action=ArgAction::Set, help = "Set random seed")]
+    seed: Option<u64>,
+    #[clap(long, short='r', action=ArgAction::SetTrue, help = "Reset storage")]
+    reset: bool,
+}
 
 #[tokio::main]
 async fn main() -> AppResult<()> {
@@ -10,10 +20,9 @@ async fn main() -> AppResult<()> {
         .with_file(true)
         .init();
 
-    let market = Market::new();
-    debug!("Started Market with {} stonks!", market.stonks.len());
+    let args = Args::parse();
 
-    AppServer::new(market).run().await?;
+    AppServer::new(args.reset, args.seed)?.run().await?;
 
     Ok(())
 }

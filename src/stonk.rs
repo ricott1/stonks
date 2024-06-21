@@ -3,6 +3,8 @@ use rand_distr::{Cauchy, Distribution, Normal};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
+use crate::{agent::DecisionAgent, utils::AppResult};
+
 const MIN_DRIFT: f64 = -0.2;
 const MAX_DRIFT: f64 = -MIN_DRIFT;
 
@@ -14,7 +16,7 @@ pub enum StonkClass {
     Technology,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum StonkCondition {
     Bump {
         amount: f64,
@@ -25,13 +27,13 @@ pub enum StonkCondition {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Stonk {
     pub id: usize,
     pub class: StonkClass,
     pub name: String,
     pub price_per_share_in_cents: u32, //price is to be intended in cents, and displayed accordingly
-    pub number_of_shares: u32,
+    number_of_shares: u32,
     pub allocated_shares: u32,
     drift: f64,            // Cauchy dist mean, changes the mean price percentage variation
     drift_volatility: f64, // Influences the rate of change of drift, must be positive
@@ -71,8 +73,28 @@ impl Stonk {
         }
     }
 
+    pub fn to_stake(&self, agent: &dyn DecisionAgent) -> f64 {
+        agent.owned_stonks()[self.id] as f64 / self.number_of_shares as f64
+    }
     pub fn market_cap(&self) -> u32 {
         self.price_per_share_in_cents as u32 * self.number_of_shares as u32
+    }
+
+    pub fn available_amount(&self) -> u32 {
+        self.number_of_shares - self.allocated_shares
+    }
+
+    pub fn release_agent_stonks(&mut self, agent: &dyn DecisionAgent) -> AppResult<()> {
+        let amount = agent.owned_stonks()[self.id];
+        if amount > self.allocated_shares {
+            return Err(format!(
+                "Underflow while releasing agent stonks: {} > {}",
+                amount, self.allocated_shares
+            )
+            .into());
+        }
+        self.allocated_shares -= amount;
+        Ok(())
     }
 
     pub fn apply_conditions(&mut self, current_tick: usize) {

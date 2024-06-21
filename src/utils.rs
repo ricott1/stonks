@@ -1,19 +1,19 @@
-use crate::agent::UserAgent;
+use crate::market::Market;
+use crate::ssh_server::AgentsDatabase;
 use image::io::Reader as ImageReader;
 use image::{Pixel, RgbaImage};
 use include_dir::{include_dir, Dir};
 use ratatui::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::Cursor;
 use std::path::PathBuf;
-use std::time::SystemTime;
 
 pub type AppResult<T> = Result<T, Box<dyn std::error::Error>>;
 
 static ASSETS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/assets/");
 static AGENTS_STORE_FILENAME: &'static str = "agents.json";
+static MARKET_STORE_FILENAME: &'static str = "market.json";
 
 fn read_image(path: &str) -> AppResult<RgbaImage> {
     let file = ASSETS_DIR.get_file(path);
@@ -109,11 +109,20 @@ fn load_from_json<T: for<'a> Deserialize<'a>>(path: PathBuf) -> AppResult<T> {
     Ok(data)
 }
 
-pub fn save_agents(agents: &HashMap<String, (SystemTime, UserAgent)>) -> AppResult<()> {
+pub fn save_agents(agents: &AgentsDatabase) -> AppResult<()> {
     save_to_json(store_path(AGENTS_STORE_FILENAME)?, agents)?;
     Ok(())
 }
 
-pub fn load_agents() -> AppResult<HashMap<String, (SystemTime, UserAgent)>> {
+pub fn save_market(market: &Market) -> AppResult<()> {
+    save_to_json(store_path(MARKET_STORE_FILENAME)?, market)?;
+    Ok(())
+}
+
+pub fn load_agents() -> AppResult<AgentsDatabase> {
     load_from_json(store_path(AGENTS_STORE_FILENAME)?)
+}
+
+pub fn load_market() -> AppResult<Market> {
+    load_from_json(store_path(MARKET_STORE_FILENAME)?)
 }

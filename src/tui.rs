@@ -3,6 +3,7 @@ use crate::market::Market;
 use crate::ssh_backend::SSHBackend;
 use crate::ui::{render, UiOptions};
 use crate::utils::AppResult;
+use crossterm::terminal::{Clear, EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::Terminal;
 
 /// Representation of a terminal user interface.
@@ -29,6 +30,11 @@ impl Tui {
     ///
     /// It enables the raw mode and sets terminal properties.
     fn init(&mut self) -> AppResult<()> {
+        crossterm::execute!(
+            self.terminal.backend_mut(),
+            EnterAlternateScreen,
+            Clear(crossterm::terminal::ClearType::All)
+        )?;
         self.terminal.clear()?;
         Ok(())
     }
@@ -62,6 +68,11 @@ impl Tui {
     /// This function is also used for the panic hook to revert
     /// the terminal properties if unexpected errors occur.
     fn reset(&mut self) -> AppResult<()> {
+        crossterm::execute!(
+            self.terminal.backend_mut(),
+            LeaveAlternateScreen,
+            Clear(crossterm::terminal::ClearType::All)
+        )?;
         self.terminal.clear()?;
         Ok(())
     }
