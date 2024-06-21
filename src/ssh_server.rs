@@ -113,11 +113,16 @@ struct Client {
     tui: Tui,
     ui_options: UiOptions,
     last_action: SystemTime,
-    agent: UserAgent,
+    agent_username: String,
 }
 
 impl Client {
-    pub fn handle_key_events(&mut self, key_event: KeyEvent, market: &Market) -> AppResult<()> {
+    pub fn handle_key_events(
+        &mut self,
+        key_event: KeyEvent,
+        market: &Market,
+        agent: &mut UserAgent,
+    ) -> AppResult<()> {
         match key_event.code {
             crossterm::event::KeyCode::Enter | crossterm::event::KeyCode::Backspace => {
                 match market.phase {
@@ -129,11 +134,11 @@ impl Client {
                         }
                     }
                     GamePhase::Night { .. } => {
-                        if self.agent.selected_action().is_none() {
+                        if agent.selected_action().is_none() {
                             if let Some(idx) = self.ui_options.selected_event_card {
-                                if idx < self.agent.available_night_events().len() {
-                                    let action = self.agent.available_night_events()[idx].action();
-                                    self.agent.select_action(action);
+                                if idx < agent.available_night_events().len() {
+                                    let action = agent.available_night_events()[idx].action();
+                                    agent.select_action(action);
                                 }
                             }
                         }
@@ -156,8 +161,7 @@ impl Client {
                 }
                 .min(stonk.available_amount());
 
-                self.agent
-                    .select_action(AgentAction::Buy { stonk_id, amount })
+                agent.select_action(AgentAction::Buy { stonk_id, amount })
             }
 
             KeyCode::Char('m') => {
@@ -167,9 +171,8 @@ impl Client {
                     self.ui_options.selected_stonk_index
                 };
                 let stonk = &market.stonks[stonk_id];
-                let amount = (self.agent.cash() / stonk.buy_price()).min(stonk.available_amount());
-                self.agent
-                    .select_action(AgentAction::Buy { stonk_id, amount })
+                let amount = (agent.cash() / stonk.buy_price()).min(stonk.available_amount());
+                agent.select_action(AgentAction::Buy { stonk_id, amount })
             }
 
             KeyCode::Char('s') => {
@@ -183,8 +186,7 @@ impl Client {
                 } else {
                     1
                 };
-                self.agent
-                    .select_action(AgentAction::Sell { stonk_id, amount })
+                agent.select_action(AgentAction::Sell { stonk_id, amount })
             }
 
             KeyCode::Char('d') => {
@@ -193,13 +195,12 @@ impl Client {
                 } else {
                     self.ui_options.selected_stonk_index
                 };
-                let amount = self.agent.owned_stonks()[stonk_id];
-                self.agent
-                    .select_action(AgentAction::Sell { stonk_id, amount })
+                let amount = agent.owned_stonks()[stonk_id];
+                agent.select_action(AgentAction::Sell { stonk_id, amount })
             }
 
             key_code => {
-                self.ui_options.handle_key_events(key_code, &self.agent)?;
+                self.ui_options.handle_key_events(key_code, agent)?;
             }
         }
         Ok(())
@@ -315,14 +316,6 @@ impl AppServer {
                             <= Duration::from_secs(PERSISTED_CLIENTS_DROPOUT_TIME_SECONDS)
                     });
 
-                    for stonk in market.stonks.iter_mut() {
-                        let allocated_shares = persisted_agents
-                            .iter()
-                            .map(|(_, (_, agent))| agent.owned_stonks()[stonk.id])
-                            .sum::<u32>();
-                        stonk.allocated_shares = allocated_shares;
-                    }
-
                     save_market(&market).expect("Failed to store agents to disk");
                     last_save_to_store = SystemTime::now();
                 }
@@ -330,13 +323,16 @@ impl AppServer {
                 let number_of_players = clients.len();
 
                 for (id, client) in clients.iter_mut() {
+                    let (_, agent) = persisted_agents
+                        .get_mut(&client.agent_username)
+                        .expect("Client agent should exist in persisted agents.");
                     match market.phase {
                         GamePhase::Day { .. } => {
                             client.ui_options.render_counter = 0;
                             client.ui_options.selected_event_card = None;
-                            if let Some(_) = client.agent.selected_action() {
+                            if let Some(_) = agent.selected_action() {
                                 market
-                                    .apply_agent_action::<UserAgent>(&mut client.agent)
+                                    .apply_agent_action::<UserAgent>(agent)
                                     .unwrap_or_else(|e| {
                                         error!("Could not apply agent {} action: {}", id, e)
                                     });
@@ -348,10 +344,10 @@ impl AppServer {
                             // At the beginning of the night, set the available events.
                             // We set them here because we need the market data.
                             if client.ui_options.render_counter == 0
-                                && client.agent.available_night_events().len() == 0
+                                && agent.available_night_events().len() == 0
                             {
                                 let mut events = NightEvent::iter()
-                                    .filter(|e| e.condition()(&client.agent))
+                                    .filter(|e| e.condition()(agent))
                                     .collect::<Vec<NightEvent>>();
                                 events.shuffle(&mut rand::thread_rng());
                                 events = events
@@ -362,22 +358,29 @@ impl AppServer {
                                 if events.len() > 0 {
                                     client.ui_options.selected_event_card = Some(0);
                                 }
-                                client.agent.set_available_night_events(events);
+                                agent.set_available_night_events(events);
                             }
                             client.ui_options.render_counter += 1;
                         }
                     }
                 }
 
+                for stonk in market.stonks.iter_mut() {
+                    let allocated_shares = persisted_agents
+                        .iter()
+                        .map(|(_, (_, agent))| agent.owned_stonks()[stonk.id])
+                        .sum::<u32>();
+                    stonk.allocated_shares = allocated_shares;
+                }
+
                 for (_, client) in clients.iter_mut() {
+                    let (_, agent) = persisted_agents
+                        .get_mut(&client.agent_username)
+                        .expect("Client agent should exist in persisted agents.");
+
                     client
                         .tui
-                        .draw(
-                            &market,
-                            &client.agent,
-                            &client.ui_options,
-                            number_of_players,
-                        )
+                        .draw(&market, &agent, &client.ui_options, number_of_players)
                         .unwrap_or_else(|e| debug!("Failed to draw: {}", e));
                 }
 
@@ -496,7 +499,7 @@ impl Handler for AppServer {
                 tui,
                 ui_options: UiOptions::new(),
                 last_action: SystemTime::now(),
-                agent,
+                agent_username: agent.username,
             };
 
             clients.insert(self.id, client);
@@ -585,23 +588,19 @@ impl Handler for AppServer {
                     _ => {
                         let market = self.market.lock().await;
                         let mut persisted_agents = self.persisted_agents.lock().await;
+                        let (_, agent) = persisted_agents
+                            .get_mut(&client.agent_username)
+                            .expect("Agent should have been persisted");
 
                         let now = SystemTime::now();
                         client.last_action = now;
                         client
-                            .handle_key_events(key_event, &market)
+                            .handle_key_events(key_event, &market, agent)
                             .map_err(|e| anyhow::anyhow!("Error: {}", e))?;
-                        let mut db_agent = client.agent.clone();
-                        db_agent.clear_action();
-                        persisted_agents.insert(client.agent.username.clone(), (now, db_agent));
+                        agent.clear_action();
                         client
                             .tui
-                            .draw(
-                                &market,
-                                &client.agent,
-                                &client.ui_options,
-                                number_of_players,
-                            )
+                            .draw(&market, &agent, &client.ui_options, number_of_players)
                             .unwrap_or_else(|e| error!("Failed to draw: {}", e));
                     }
                 },
