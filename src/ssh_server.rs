@@ -299,21 +299,29 @@ impl AppServer {
                     > Duration::from_secs(SAVE_TO_STORE_INTERVAL_SECONDS)
                 {
                     // Drop agents and release their stocks.
-                    for (_, (t, agent)) in persisted_agents.iter() {
-                        if t.elapsed().expect("Time flows backwards")
-                            <= Duration::from_secs(PERSISTED_CLIENTS_DROPOUT_TIME_SECONDS)
-                        {
-                            for stonk in market.stonks.iter_mut() {
-                                if stonk.release_agent_stonks(agent).is_err() {
-                                    println!("Failed to release agent stonks");
-                                }
-                            }
-                        }
-                    }
+                    // for (_, (t, agent)) in persisted_agents.iter() {
+                    //     if t.elapsed().expect("Time flows backwards")
+                    //         <= Duration::from_secs(PERSISTED_CLIENTS_DROPOUT_TIME_SECONDS)
+                    //     {
+                    //         for stonk in market.stonks.iter_mut() {
+                    //             if stonk.release_agent_stonks(agent).is_err() {
+                    //                 println!("Failed to release agent stonks");
+                    //             }
+                    //         }
+                    //     }
+                    // }
                     persisted_agents.retain(|_, (t, _)| {
                         t.elapsed().expect("Time flows")
                             <= Duration::from_secs(PERSISTED_CLIENTS_DROPOUT_TIME_SECONDS)
                     });
+
+                    for stonk in market.stonks.iter_mut() {
+                        let allocated_shares = persisted_agents
+                            .iter()
+                            .map(|(_, (_, agent))| agent.owned_stonks()[stonk.id])
+                            .sum::<u32>();
+                        stonk.allocated_shares = allocated_shares;
+                    }
 
                     save_market(&market).expect("Failed to store agents to disk");
                     last_save_to_store = SystemTime::now();
