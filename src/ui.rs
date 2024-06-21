@@ -759,14 +759,19 @@ fn render_footer(
             };
             let stonk = &market.stonks[stonk_id];
 
-            let max_buy_amount = agent.cash() / stonk.buy_price();
+            let max_buy_amount = (agent.cash() / stonk.buy_price()).min(stonk.available_amount());
             lines.push(
                 format!(
                     "{:28} {:28} {:28}",
-                    format!("`b`: buy  x1 (${:.2})", stonk.formatted_buy_price()),
                     format!(
-                        "`B`: buy  x100 (${:.2})",
-                        100.0 * stonk.formatted_buy_price()
+                        "`b`: buy  x{} (${:.2})",
+                        1.min(max_buy_amount),
+                        1.min(max_buy_amount) as f64 * stonk.formatted_buy_price()
+                    ),
+                    format!(
+                        "`B`: buy  x{} (${:.2})",
+                        100.min(max_buy_amount),
+                        100.min(max_buy_amount) as f64 * stonk.formatted_buy_price()
                     ),
                     format!(
                         "`m`: buy  x{} (${:.2})",
