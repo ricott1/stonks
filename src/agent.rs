@@ -1,4 +1,6 @@
-use crate::{market::NUMBER_OF_STONKS, ssh_server::Password, stonk::StonkClass, utils::AppResult};
+use crate::{
+    market::NUMBER_OF_STONKS, ssh_server::SessionAuth, stonk::StonkClass, utils::AppResult,
+};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum_macros::EnumIter;
@@ -96,10 +98,9 @@ pub trait DecisionAgent {
     fn available_night_events(&self) -> &Vec<NightEvent>;
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserAgent {
-    pub username: String,
-    pub password: Password,
+    pub session_auth: SessionAuth,
     cash: u32, //in usd cents
     owned_stonks: [u32; NUMBER_OF_STONKS],
     pending_action: Option<AgentAction>,
@@ -107,14 +108,18 @@ pub struct UserAgent {
 }
 
 impl UserAgent {
-    pub fn new(username: String, password: Password) -> Self {
+    pub fn new(session_auth: SessionAuth) -> Self {
         Self {
-            username,
-            password,
+            session_auth,
             cash: INITIAL_USER_CASH_CENTS, // in cents
             owned_stonks: [0; NUMBER_OF_STONKS],
-            ..Default::default()
+            pending_action: None,
+            available_night_events: vec![],
         }
+    }
+
+    pub fn username(&self) -> &str {
+        &self.session_auth.username
     }
 
     pub fn formatted_cash(&self) -> f64 {

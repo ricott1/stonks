@@ -299,7 +299,6 @@ impl StonkMarket for Market {
                     let cost = stonk.buy_price() * amount;
                     agent.sub_cash(cost)?;
                     agent.add_stonk(stonk_id, amount)?;
-                    stonk.allocated_shares += amount;
                     let bump_amount = stonk.to_stake(agent);
                     stonk.add_condition(
                         StonkCondition::Bump {
@@ -307,19 +306,12 @@ impl StonkMarket for Market {
                         },
                         self.last_tick + 1,
                     );
-                    println!(
-                        "Buy action: amount={}, allocated={},available={}",
-                        amount,
-                        stonk.allocated_shares,
-                        stonk.available_amount()
-                    )
                 }
                 AgentAction::Sell { stonk_id, amount } => {
                     let stonk = &mut self.stonks[stonk_id];
                     let cost = stonk.sell_price() * amount;
                     agent.sub_stonk(stonk_id, amount)?;
                     agent.add_cash(cost)?;
-                    stonk.allocated_shares -= amount;
                     let bump_amount = stonk.to_stake(agent);
                     stonk.add_condition(
                         StonkCondition::Bump {
@@ -327,12 +319,6 @@ impl StonkMarket for Market {
                         },
                         self.last_tick + 1,
                     );
-                    println!(
-                        "Sell action: amount={}, allocated={},available={}",
-                        amount,
-                        stonk.allocated_shares,
-                        stonk.available_amount()
-                    )
                 }
                 AgentAction::BumpStonkClass { class } => {
                     for stonk in self.stonks.iter_mut().filter(|s| s.class == class) {

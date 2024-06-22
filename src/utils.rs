@@ -1,13 +1,17 @@
 use crate::market::Market;
 use crate::ssh_server::AgentsDatabase;
+use crossterm::event::{
+    Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use image::io::Reader as ImageReader;
 use image::{Pixel, RgbaImage};
 use include_dir::{include_dir, Dir};
 use ratatui::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
-use std::io::Cursor;
+use std::io::{Cursor, Read, Write};
 use std::path::PathBuf;
+use tracing::debug;
 
 pub type AppResult<T> = Result<T, Box<dyn std::error::Error>>;
 
@@ -125,4 +129,146 @@ pub fn load_agents() -> AppResult<AgentsDatabase> {
 
 pub fn load_market() -> AppResult<Market> {
     load_from_json(store_path(MARKET_STORE_FILENAME)?)
+}
+
+pub fn save_keys(signing_key: &ed25519_dalek::SigningKey) -> AppResult<()> {
+    let file = File::create::<&str>("./keys".into())?;
+    assert!(file.metadata()?.is_file());
+    let mut buffer = std::io::BufWriter::new(file);
+    buffer.write(&signing_key.to_bytes())?;
+    Ok(())
+}
+
+pub fn load_keys() -> AppResult<ed25519_dalek::SigningKey> {
+    let file = File::open::<&str>("./keys".into())?;
+    let mut buffer = std::io::BufReader::new(file);
+    let mut buf: [u8; 32] = [0; 32];
+    buffer.read(&mut buf)?;
+    Ok(ed25519_dalek::SigningKey::from_bytes(&buf))
+}
+
+pub fn convert_data_to_key_event(data: &[u8]) -> Option<KeyEvent> {
+    debug!("convert_data_to_key_event: data {:?}", data);
+    let (code, modifiers) = if data.len() == 1 {
+        match data[0] {
+            1 => (KeyCode::Home, KeyModifiers::empty()),
+            2 => (KeyCode::Insert, KeyModifiers::empty()),
+            3 => (KeyCode::Delete, KeyModifiers::empty()),
+            4 => (KeyCode::End, KeyModifiers::empty()),
+            5 => (KeyCode::PageUp, KeyModifiers::empty()),
+            6 => (KeyCode::PageDown, KeyModifiers::empty()),
+            13 => (KeyCode::Enter, KeyModifiers::empty()),
+            // x if x >= 1 && x <= 26 => (
+            //     KeyCode::Char(((x + 86) as char).to_ascii_lowercase()),
+            //     KeyModifiers::CONTROL,
+            // ),
+            27 => (KeyCode::Esc, KeyModifiers::empty()),
+            x if x >= 65 && x <= 90 => (
+                KeyCode::Char((x as char).to_ascii_lowercase()),
+                KeyModifiers::SHIFT,
+            ),
+            x if x >= 97 && x <= 122 => (KeyCode::Char(x as char), KeyModifiers::empty()),
+            127 => (KeyCode::Backspace, KeyModifiers::empty()),
+            _ => return None,
+        }
+    } else if data.len() == 3 {
+        match data[2] {
+            65 => (KeyCode::Up, KeyModifiers::empty()),
+            66 => (KeyCode::Down, KeyModifiers::empty()),
+            67 => (KeyCode::Right, KeyModifiers::empty()),
+            68 => (KeyCode::Left, KeyModifiers::empty()),
+            _ => return None,
+        }
+    } else {
+        return None;
+    };
+
+    let event = KeyEvent::new(code, modifiers);
+    Some(event)
+}
+
+pub fn decode_sgr_mouse_input(ansi_code: Vec<u8>) -> AppResult<(u8, u16, u16)> {
+    // Convert u8 vector to a String
+    let ansi_str = String::from_utf8(ansi_code.clone()).map_err(|_| "Invalid UTF-8 sequence")?;
+
+    // Check the prefix
+    if !ansi_str.starts_with("\x1b[<") {
+        return Err("Invalid SGR ANSI mouse code".into());
+    }
+
+    let cb_mod = if ansi_str.ends_with('M') {
+        0
+    } else if ansi_str.ends_with('m') {
+        3
+    } else {
+        return Err("Invalid SGR ANSI mouse code".into());
+    };
+
+    // Remove the prefix '\x1b[<' and trailing 'M'
+    let code_body = &ansi_str[3..ansi_str.len() - 1];
+
+    // Split the components
+    let components: Vec<&str> = code_body.split(';').collect();
+
+    if components.len() != 3 {
+        return Err("Invalid SGR ANSI mouse code format".into());
+    }
+
+    // Parse the components
+    let cb = cb_mod
+        + components[0]
+            .parse::<u8>()
+            .map_err(|_| "Failed to parse Cb")?;
+    let cx = components[1]
+        .parse::<u16>()
+        .map_err(|_| "Failed to parse Cx")?;
+    let cy = components[2]
+        .parse::<u16>()
+        .map_err(|_| "Failed to parse Cy")?;
+
+    Ok((cb, cx, cy))
+}
+
+pub fn convert_data_to_mouse_event(data: &[u8]) -> Option<MouseEvent> {
+    let (cb, column, row) = decode_sgr_mouse_input(data.to_vec()).ok()?;
+    let kind = match cb {
+        0 => MouseEventKind::Down(MouseButton::Left),
+        1 => MouseEventKind::Down(MouseButton::Middle),
+        2 => MouseEventKind::Down(MouseButton::Right),
+        3 => MouseEventKind::Up(MouseButton::Left),
+        32 => MouseEventKind::Drag(MouseButton::Left),
+        33 => MouseEventKind::Drag(MouseButton::Middle),
+        34 => MouseEventKind::Drag(MouseButton::Right),
+        35 => MouseEventKind::Moved,
+        64 => MouseEventKind::ScrollUp,
+        65 => MouseEventKind::ScrollDown,
+        96..=255 => {
+            debug!("cb {}", cb);
+            return None;
+        }
+        _ => return None,
+    };
+
+    let event = MouseEvent {
+        kind,
+        column,
+        row,
+        modifiers: KeyModifiers::empty(),
+    };
+
+    Some(event)
+}
+
+pub fn convert_data_to_crossterm_event(data: &[u8]) -> Option<Event> {
+    if data.starts_with(&[27, 91, 60]) {
+        if let Some(event) = convert_data_to_mouse_event(data) {
+            return Some(Event::Mouse(event));
+        }
+    } else {
+        if let Some(event) = convert_data_to_key_event(data) {
+            return Some(Event::Key(event));
+        }
+    }
+
+    None
 }

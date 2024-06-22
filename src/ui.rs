@@ -122,7 +122,7 @@ pub struct UiOptions {
     palette_index: usize,
     zoom_level: ZoomLevel,
     pub render_counter: usize,
-    pub selected_event_card: Option<usize>,
+    pub selected_event_card_index: Option<usize>,
 }
 
 impl UiOptions {
@@ -134,7 +134,7 @@ impl UiOptions {
             palette_index: 0,
             zoom_level: ZoomLevel::Short,
             render_counter: 0,
-            selected_event_card: None,
+            selected_event_card_index: None,
         }
     }
 
@@ -159,21 +159,21 @@ impl UiOptions {
 
             crossterm::event::KeyCode::Left => {
                 if agent.selected_action().is_none() && num_night_events > 0 {
-                    if let Some(idx) = self.selected_event_card {
-                        self.selected_event_card =
+                    if let Some(idx) = self.selected_event_card_index {
+                        self.selected_event_card_index =
                             Some((idx + num_night_events - 1) % num_night_events)
                     } else {
-                        self.selected_event_card = Some(0)
+                        self.selected_event_card_index = Some(0)
                     }
                 }
             }
 
             crossterm::event::KeyCode::Right => {
                 if agent.selected_action().is_none() && num_night_events > 0 {
-                    if let Some(idx) = self.selected_event_card {
-                        self.selected_event_card = Some((idx + 1) % num_night_events)
+                    if let Some(idx) = self.selected_event_card_index {
+                        self.selected_event_card_index = Some((idx + 1) % num_night_events)
                     } else {
-                        self.selected_event_card = Some(0)
+                        self.selected_event_card_index = Some(0)
                     }
                 }
             }
@@ -478,8 +478,8 @@ fn render_night(
                         );
                     }
                 } else {
-                    if ui_options.selected_event_card.is_some()
-                        && ui_options.selected_event_card.unwrap() == i
+                    if ui_options.selected_event_card_index.is_some()
+                        && ui_options.selected_event_card_index.unwrap() == i
                     {
                         let border_style = Style::default().red().on_red();
                         frame.render_widget(
@@ -704,7 +704,7 @@ fn render_header(
                     "{} player{} online - `ssh {}@frittura.org -p 3333`",
                     number_of_players,
                     if number_of_players > 1 { "s" } else { "" },
-                    agent.username
+                    agent.username()
                 )
             }
         }
@@ -713,7 +713,7 @@ fn render_header(
                 "{} player{} online - `ssh {}@frittura.org -p 3333`",
                 number_of_players,
                 if number_of_players > 1 { "s" } else { "" },
-                agent.username
+                agent.username()
             )
         }
     };

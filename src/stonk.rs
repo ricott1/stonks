@@ -3,7 +3,7 @@ use rand_distr::{Cauchy, Distribution, Normal};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::{agent::DecisionAgent, utils::AppResult};
+use crate::agent::DecisionAgent;
 
 const MIN_DRIFT: f64 = -0.2;
 const MAX_DRIFT: f64 = -MIN_DRIFT;
@@ -82,19 +82,6 @@ impl Stonk {
 
     pub fn available_amount(&self) -> u32 {
         self.number_of_shares - self.allocated_shares
-    }
-
-    pub fn release_agent_stonks(&mut self, agent: &dyn DecisionAgent) -> AppResult<()> {
-        let amount = agent.owned_stonks()[self.id];
-        if amount > self.allocated_shares {
-            return Err(format!(
-                "Underflow while releasing agent stonks: {} > {}",
-                amount, self.allocated_shares
-            )
-            .into());
-        }
-        self.allocated_shares -= amount;
-        Ok(())
     }
 
     pub fn apply_conditions(&mut self, current_tick: usize) {
