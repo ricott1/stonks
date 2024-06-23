@@ -153,8 +153,10 @@ impl Client {
                     self.ui_options.selected_stonk_index
                 };
                 let stonk = &market.stonks[stonk_id];
-                let amount = (agent.cash() / stonk.buy_price()).min(stonk.available_amount());
-                agent.select_action(AgentAction::Buy { stonk_id, amount })
+                if stonk.buy_price() > 0 {
+                    let amount = (agent.cash() / stonk.buy_price()).min(stonk.available_amount());
+                    agent.select_action(AgentAction::Buy { stonk_id, amount })
+                }
             }
 
             KeyCode::Char('s') => {

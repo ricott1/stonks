@@ -775,7 +775,11 @@ fn render_footer(
             };
             let stonk = &market.stonks[stonk_id];
 
-            let max_buy_amount = (agent.cash() / stonk.buy_price()).min(stonk.available_amount());
+            let max_buy_amount = if stonk.buy_price() > 0 {
+                (agent.cash() / stonk.buy_price()).min(stonk.available_amount())
+            } else {
+                0
+            };
             lines.push(
                 format!(
                     "{:28} {:28} {:28}",
