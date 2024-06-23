@@ -1,5 +1,7 @@
 use crate::agent::{DecisionAgent, UserAgent};
-use crate::market::{GamePhase, Market, DAY_LENGTH, HISTORICAL_SIZE, NIGHT_LENGTH};
+use crate::market::{
+    GamePhase, Market, DAY_LENGTH, HISTORICAL_SIZE, MAX_EVENTS_PER_NIGHT, NIGHT_LENGTH,
+};
 use crate::stonk::Stonk;
 use crate::utils::{img_to_lines, AppResult};
 use crossterm::event::KeyCode;
@@ -11,7 +13,7 @@ use ratatui::symbols;
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{
     Axis, Block, Borders, Cell, Chart, Dataset, GraphType, HighlightSpacing, Paragraph, Row, Table,
-    TableState,
+    TableState, Wrap,
 };
 use ratatui::{layout::Layout, Frame};
 use std::fmt::{self};
@@ -35,13 +37,14 @@ static STONKS_LINES: Lazy<Vec<Line>> = Lazy::new(|| {
 static STONKS_CARDS: Lazy<Vec<Vec<Line>>> = Lazy::new(|| {
     (1..=13)
         .map(|n| {
-            img_to_lines(format!("card{:02}.png", n).as_str()).expect("Cannot load stonk image")
+            img_to_lines(format!("images/card{:02}.png", n).as_str())
+                .expect("Cannot load stonk image")
         })
         .collect::<Vec<Vec<Line>>>()
 });
 
 static UNSELECTED_CARD: Lazy<Vec<Line>> =
-    Lazy::new(|| img_to_lines("unselected_card.png").expect("Cannot load stonk image"));
+    Lazy::new(|| img_to_lines("images/unselected_card.png").expect("Cannot load stonk image"));
 
 const CARD_WIDTH: u16 = 28;
 const CARD_HEIGHT: u16 = 40 / 2;
@@ -401,7 +404,7 @@ fn render_day(
 ) -> AppResult<()> {
     if let Some(stonk_id) = ui_options.focus_on_stonk {
         let stonk = &market.stonks[stonk_id];
-        render_stonk(frame, market, ui_options, stonk, area)?;
+        render_stonk(frame, market, agent, ui_options, stonk, area)?;
     } else {
         let colors = TableColors::new(&PALETTES[ui_options.palette_index]);
         let table = build_stonks_table(market, agent, colors);
@@ -449,7 +452,7 @@ fn render_night(
 
     if num_night_events > 0 {
         let cards_split =
-            Layout::horizontal([Constraint::Length(CARD_WIDTH + 4)].repeat(num_night_events))
+            Layout::horizontal([Constraint::Length(CARD_WIDTH + 4)].repeat(MAX_EVENTS_PER_NIGHT))
                 .split(v_split[2]);
 
         for i in 0..num_night_events {
@@ -466,10 +469,13 @@ fn render_night(
                 );
             } else {
                 let selected_event = agent.available_night_events()[i];
+                let border_style = if agent.selected_action().is_some() {
+                    Style::default().green().on_green()
+                } else {
+                    Style::default().red().on_red()
+                };
                 if agent.selected_action().is_some() {
                     if agent.selected_action().unwrap() == selected_event.action() {
-                        //this check fails
-                        let border_style = Style::default().green().on_green();
                         frame.render_widget(
                             Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone())
                                 .block(Block::bordered().border_style(border_style)),
@@ -497,7 +503,6 @@ fn render_night(
                     if ui_options.selected_event_card_index.is_some()
                         && ui_options.selected_event_card_index.unwrap() == i
                     {
-                        let border_style = Style::default().red().on_red();
                         frame.render_widget(
                             Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone())
                                 .block(Block::bordered().border_style(border_style)),
@@ -522,15 +527,16 @@ fn render_night(
                         );
                     }
                 }
+
+                let mut lines =
+                    vec![Line::from(selected_event.to_string().to_ascii_uppercase())
+                        .style(border_style)];
+                for l in selected_event.description().iter() {
+                    lines.push(Line::from(*l).bold().black());
+                }
+
                 frame.render_widget(
-                    Paragraph::new(
-                        selected_event
-                            .description()
-                            .iter()
-                            .map(|l| Line::from(*l).bold().black())
-                            .collect::<Vec<Line>>(),
-                    )
-                    .centered(),
+                    Paragraph::new(lines).centered(),
                     cards_split[i].inner(&Margin {
                         horizontal: 3,
                         vertical: 3,
@@ -538,9 +544,23 @@ fn render_night(
                 );
             }
         }
+
+        if num_night_events < MAX_EVENTS_PER_NIGHT {
+            frame.render_widget(
+                Paragraph::new(format!("No more events available tonight. Unlock up to {MAX_EVENTS_PER_NIGHT} events by buying more stonks!")).centered().wrap(Wrap { trim: true }),
+                cards_split[MAX_EVENTS_PER_NIGHT - 1].inner(&Margin {
+                    horizontal: 1,
+                    vertical: 2,
+                }),
+            );
+        }
     } else {
         frame.render_widget(
-            Paragraph::new("No special events available tonight").centered(),
+            Paragraph::new(
+                "No special events available tonight. Unlock events by buying more stonks!",
+            )
+            .centered()
+            .wrap(Wrap { trim: true }),
             v_split[2],
         );
     }
@@ -552,6 +572,7 @@ fn render_night(
 fn render_stonk(
     frame: &mut Frame,
     market: &Market,
+    agent: &UserAgent,
     ui_options: &UiOptions,
     stonk: &Stonk,
     area: Rect,
@@ -656,6 +677,8 @@ fn render_stonk(
         .map(|v| v.to_string().bold())
         .collect();
 
+    let chart_title = stonk.info(agent.owned_stonks()[stonk.id]);
+
     let chart = Chart::new(datasets)
         .block(
             Block::bordered()
@@ -673,10 +696,7 @@ fn render_stonk(
         )
         .y_axis(
             Axis::default()
-                .title(format!(
-                    "Price ${:.2}",
-                    stonk.price_per_share_in_cents as f64 / 100.0
-                ))
+                .title(chart_title)
                 .style(Style::default().gray())
                 .labels(y_labels)
                 .bounds([min_y_bound as f64, max_y_bound as f64]),
@@ -741,6 +761,22 @@ fn render_header(
     );
 
     frame.render_widget(Paragraph::new(header_text), area);
+}
+
+fn render_stonk_info(
+    frame: &mut Frame,
+    market: &Market,
+    _agent: &UserAgent,
+    ui_options: &UiOptions,
+    area: Rect,
+) {
+    let stonk_id = if let Some(stonk_id) = ui_options.focus_on_stonk {
+        stonk_id
+    } else {
+        ui_options.selected_stonk_index
+    };
+    let stonk = &market.stonks[stonk_id];
+    frame.render_widget(Paragraph::new(stonk.description.clone()), area);
 }
 
 fn render_footer(
@@ -846,9 +882,10 @@ pub fn render(
 
     let area = frame.size();
     let split = Layout::vertical([
-        Constraint::Length(1),
-        Constraint::Min(0),
-        Constraint::Length(3),
+        Constraint::Length(1), //header
+        Constraint::Min(0),    //body
+        Constraint::Length(3), // stonk info / newspaper
+        Constraint::Length(3), //footer
     ])
     .split(area);
 
@@ -871,7 +908,8 @@ pub fn render(
         },
     }
 
-    self::render_footer(frame, market, agent, ui_options, split[2]);
+    self::render_stonk_info(frame, market, agent, ui_options, split[2]);
+    self::render_footer(frame, market, agent, ui_options, split[3]);
 
     Ok(())
 }

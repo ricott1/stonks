@@ -1,5 +1,6 @@
-use crate::market::Market;
+use crate::market::{Market, NUMBER_OF_STONKS};
 use crate::ssh_server::AgentsDatabase;
+use crate::stonk::Stonk;
 use crossterm::event::{
     Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
@@ -129,6 +130,17 @@ pub fn load_agents() -> AppResult<AgentsDatabase> {
 
 pub fn load_market() -> AppResult<Market> {
     load_from_json(store_path(MARKET_STORE_FILENAME)?)
+}
+
+pub fn load_stonks_data() -> AppResult<[Stonk; NUMBER_OF_STONKS]> {
+    let file = ASSETS_DIR
+        .get_file("data/stonks_data.json")
+        .expect("Failed to get stonks data file");
+    let data = file
+        .contents_utf8()
+        .expect("Failed to read stonks data file");
+    let stonks = serde_json::from_str(&data)?;
+    Ok(stonks)
 }
 
 pub fn save_keys(signing_key: &ed25519_dalek::SigningKey) -> AppResult<()> {

@@ -1,5 +1,5 @@
 use crate::agent::{AgentAction, DecisionAgent, NightEvent, UserAgent};
-use crate::market::{GamePhase, Market, StonkMarket, HISTORICAL_SIZE, MAX_EVENTS_PER_NIGHT};
+use crate::market::{GamePhase, Market, HISTORICAL_SIZE, MAX_EVENTS_PER_NIGHT};
 use crate::ssh_backend::SSHBackend;
 use crate::tui::Tui;
 use crate::ui::UiOptions;
@@ -136,12 +136,17 @@ impl Client {
                 };
 
                 let stonk = &market.stonks[stonk_id];
+                let max_buy_amount = if stonk.buy_price() > 0 {
+                    (agent.cash() / stonk.buy_price()).min(stonk.available_amount())
+                } else {
+                    0
+                };
                 let amount = if key_event.modifiers == KeyModifiers::SHIFT {
                     100
                 } else {
                     1
                 }
-                .min(stonk.available_amount());
+                .min(max_buy_amount);
 
                 agent.select_action(AgentAction::Buy { stonk_id, amount })
             }
@@ -153,10 +158,15 @@ impl Client {
                     self.ui_options.selected_stonk_index
                 };
                 let stonk = &market.stonks[stonk_id];
-                if stonk.buy_price() > 0 {
-                    let amount = (agent.cash() / stonk.buy_price()).min(stonk.available_amount());
-                    agent.select_action(AgentAction::Buy { stonk_id, amount })
-                }
+                let max_buy_amount = if stonk.buy_price() > 0 {
+                    (agent.cash() / stonk.buy_price()).min(stonk.available_amount())
+                } else {
+                    0
+                };
+                agent.select_action(AgentAction::Buy {
+                    stonk_id,
+                    amount: max_buy_amount,
+                })
             }
 
             KeyCode::Char('s') => {
@@ -326,7 +336,7 @@ impl AppServer {
                                 && agent.available_night_events().len() == 0
                             {
                                 let mut events = NightEvent::iter()
-                                    .filter(|e| e.condition()(agent))
+                                    .filter(|e| e.unlock_condition()(agent, &market))
                                     .collect::<Vec<NightEvent>>();
                                 events.shuffle(&mut rand::thread_rng());
                                 events = events

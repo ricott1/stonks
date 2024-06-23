@@ -31,6 +31,7 @@ pub struct Stonk {
     pub id: usize,
     pub class: StonkClass,
     pub name: String,
+    pub description: String,
     pub price_per_share_in_cents: u32, //price is to be intended in cents, and displayed accordingly
     number_of_shares: u32,
     allocated_shares: u32,
@@ -64,6 +65,7 @@ impl Stonk {
             id,
             class,
             name,
+            description: "".to_string(),
             price_per_share_in_cents,
             number_of_shares,
             allocated_shares: 0,
@@ -81,6 +83,27 @@ impl Stonk {
     pub fn to_stake(&self, amount: u32) -> f64 {
         amount as f64 / self.number_of_shares as f64
     }
+
+    pub fn info(&self, amount: u32) -> String {
+        let share = self.to_stake(amount) * 100.0;
+        if share >= 5.0 {
+            format!(
+                "Price ${:.2} - Drift {:.3} - Volatility {:.3}",
+                self.price_per_share_in_cents as f64 / 100.0,
+                self.drift,
+                self.volatility
+            )
+        } else if share >= 1.0 {
+            format!(
+                "Price ${:.2} - Drift {:.3}",
+                self.price_per_share_in_cents as f64 / 100.0,
+                self.drift
+            )
+        } else {
+            format!("Price ${:.2}", self.price_per_share_in_cents as f64 / 100.0)
+        }
+    }
+
     pub fn market_cap(&self) -> u32 {
         self.price_per_share_in_cents as u32 * self.number_of_shares as u32
     }
@@ -206,7 +229,7 @@ impl Stonk {
 
         // self.drift = self.drift.min(MAX_DRIFT).max(MIN_DRIFT);
 
-        // Add recovery mechanism for falling stonks. not ideal.
+        // Add control mechanisms for extreme prices. not ideal.
         if (self.price_per_share_in_cents as f64) < self.starting_price as f64 / 8.0 {
             self.add_condition(StonkCondition::Bump { amount: 0.25 }, current_tick + 1);
             self.add_condition(

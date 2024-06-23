@@ -1,5 +1,8 @@
 use crate::{
-    market::NUMBER_OF_STONKS, ssh_server::SessionAuth, stonk::StonkClass, utils::AppResult,
+    market::{Market, NUMBER_OF_STONKS},
+    ssh_server::SessionAuth,
+    stonk::{Stonk, StonkClass},
+    utils::AppResult,
 };
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
@@ -15,10 +18,17 @@ pub enum AgentAction {
     CrashAll,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum AgentCondition {
+    Prison { until_tick: usize },
+}
+
 #[derive(Debug, Clone, Copy, EnumIter, PartialEq, Serialize, Deserialize)]
 pub enum NightEvent {
     War,
     ColdWinter,
+    RoyalScandal,
+    PurpleBlockchain,
     MarketCrash,
 }
 
@@ -27,6 +37,8 @@ impl Display for NightEvent {
         match self {
             Self::War => write!(f, "War"),
             Self::ColdWinter => write!(f, "Cold winter"),
+            Self::RoyalScandal => write!(f, "Royal scandal"),
+            Self::PurpleBlockchain => write!(f, "Purple blockchain"),
             Self::MarketCrash => write!(f, "Market crash"),
         }
     }
@@ -34,38 +46,113 @@ impl Display for NightEvent {
 
 impl NightEvent {
     pub fn description(&self) -> Vec<&str> {
-        match self {
+        let mut description = match self {
             Self::War => vec![
-                "WAR",
-                "",
                 "It's war time!",
                 "Chance for all war stonks",
                 "to get a big bump.",
             ],
             Self::ColdWinter => vec![
-                "COLD WINTER",
-                "",
+                "Apparently next winter",
+                "is gonna be very cold,",
+                "better prepare soon. So",
+                "much for global warming!",
+            ],
+            Self::RoyalScandal => vec![
+                "Apparently next winter",
+                "is gonna be very cold,",
+                "better prepare soon. So",
+                "much for global warming!",
+            ],
+            Self::PurpleBlockchain => vec![
                 "Apparently next winter",
                 "is gonna be very cold,",
                 "better prepare soon. So",
                 "much for global warming!",
             ],
             Self::MarketCrash => vec![
-                "MARKET CRASH",
-                "",
                 "It's 1929 all over again,",
                 "or was it 1987?",
                 "Or 2001? Or 2008?",
                 "Or...",
             ],
+        };
+
+        description.extend(vec!["Unlock Condition:"].iter());
+        description.extend(self.unlock_condition_description().iter());
+
+        description
+    }
+
+    pub fn unlock_condition(&self) -> Box<dyn Fn(&dyn DecisionAgent, &Market) -> bool> {
+        match self {
+            Self::War => Box::new(|agent, market| {
+                let war_stonks = market
+                    .stonks
+                    .iter()
+                    .filter(|s| s.class == StonkClass::War)
+                    .collect::<Vec<&Stonk>>();
+
+                war_stonks
+                    .iter()
+                    .map(|s| 100.0 * s.to_stake(agent.owned_stonks()[s.id]))
+                    .sum::<f64>()
+                    / war_stonks.len() as f64
+                    >= 1.0
+            }),
+            Self::ColdWinter => Box::new(|agent, market| {
+                let commodity_stonks = market
+                    .stonks
+                    .iter()
+                    .filter(|s| s.class == StonkClass::Commodity)
+                    .collect::<Vec<&Stonk>>();
+
+                commodity_stonks
+                    .iter()
+                    .map(|s| 100.0 * s.to_stake(agent.owned_stonks()[s.id]))
+                    .sum::<f64>()
+                    / commodity_stonks.len() as f64
+                    >= 1.0
+            }),
+            Self::RoyalScandal => Box::new(|agent, market| {
+                let media_stonks = market
+                    .stonks
+                    .iter()
+                    .filter(|s| s.class == StonkClass::Media)
+                    .collect::<Vec<&Stonk>>();
+
+                media_stonks
+                    .iter()
+                    .map(|s| 100.0 * s.to_stake(agent.owned_stonks()[s.id]))
+                    .sum::<f64>()
+                    / media_stonks.len() as f64
+                    >= 1.0
+            }),
+            Self::PurpleBlockchain => Box::new(|agent, market| {
+                let tech_stonks = market
+                    .stonks
+                    .iter()
+                    .filter(|s| s.class == StonkClass::Technology)
+                    .collect::<Vec<&Stonk>>();
+
+                tech_stonks
+                    .iter()
+                    .map(|s| 100.0 * s.to_stake(agent.owned_stonks()[s.id]))
+                    .sum::<f64>()
+                    / tech_stonks.len() as f64
+                    >= 1.0
+            }),
+            Self::MarketCrash => Box::new(|agent, _| agent.cash() >= 100000),
         }
     }
 
-    pub fn condition(&self) -> Box<dyn Fn(&dyn DecisionAgent) -> bool> {
+    fn unlock_condition_description(&self) -> Vec<&str> {
         match self {
-            Self::War => Box::new(|agent| agent.cash() > 10),
-            Self::ColdWinter => Box::new(|agent| agent.cash() > 10),
-            Self::MarketCrash => Box::new(|agent| agent.cash() > 10),
+            Self::War => vec!["Average share in", "War stonks >= 1%"],
+            Self::ColdWinter => vec!["Average share in", "Commodity stonks >= 1%"],
+            Self::RoyalScandal => vec!["Average share in", "Media stonks >= 1%"],
+            Self::PurpleBlockchain => vec!["Average share in", "Technology stonks >= 1%"],
+            Self::MarketCrash => vec!["Total cash >= 100000"],
         }
     }
 
@@ -76,6 +163,12 @@ impl NightEvent {
             },
             Self::ColdWinter => AgentAction::BumpStonkClass {
                 class: StonkClass::Commodity,
+            },
+            Self::RoyalScandal => AgentAction::BumpStonkClass {
+                class: StonkClass::Media,
+            },
+            Self::PurpleBlockchain => AgentAction::BumpStonkClass {
+                class: StonkClass::Technology,
             },
             Self::MarketCrash => AgentAction::CrashAll,
         }
@@ -107,6 +200,7 @@ pub struct UserAgent {
     owned_stonks: [u32; NUMBER_OF_STONKS],
     pending_action: Option<AgentAction>,
     available_night_events: Vec<NightEvent>,
+    conditions: Vec<AgentCondition>,
 }
 
 impl UserAgent {
@@ -117,6 +211,7 @@ impl UserAgent {
             owned_stonks: [0; NUMBER_OF_STONKS],
             pending_action: None,
             available_night_events: vec![],
+            conditions: vec![],
         }
     }
 

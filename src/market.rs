@@ -1,7 +1,7 @@
 use crate::{
     agent::{AgentAction, DecisionAgent},
     stonk::{Stonk, StonkClass, StonkCondition},
-    utils::AppResult,
+    utils::{load_stonks_data, AppResult},
 };
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
@@ -79,11 +79,6 @@ impl GamePhase {
     }
 }
 
-pub trait StonkMarket: Default {
-    fn tick(&mut self);
-    fn apply_agent_action<A: DecisionAgent>(&mut self, agent: &mut A) -> AppResult<()>;
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Market {
     pub stonks: [Stonk; NUMBER_OF_STONKS],
@@ -99,96 +94,7 @@ impl Default for Market {
 
 impl Market {
     pub fn new() -> Self {
-        let stonks = [
-            Market::new_stonk(
-                0,
-                StonkClass::Technology,
-                "Cassius INC".into(),
-                9800,
-                5000,
-                0.0001,
-                0.00025,
-                0.0008,
-                0.12,
-            ),
-            Market::new_stonk(
-                1,
-                StonkClass::Technology,
-                "Tesla".into(),
-                10000,
-                4500,
-                0.01,
-                0.00025,
-                0.001,
-                0.01,
-            ),
-            Market::new_stonk(
-                2,
-                StonkClass::Media,
-                "Rovanti".into(),
-                8000,
-                4750,
-                0.005,
-                0.0005,
-                0.00075,
-                0.01,
-            ),
-            Market::new_stonk(
-                3,
-                StonkClass::Media,
-                "Riccardino".into(),
-                9000,
-                10000,
-                0.000,
-                0.00025,
-                0.00075,
-                0.07,
-            ),
-            Market::new_stonk(
-                4,
-                StonkClass::War,
-                "Mariottide".into(),
-                60000,
-                9500,
-                0.000,
-                0.00025,
-                0.001,
-                0.1,
-            ),
-            Market::new_stonk(
-                5,
-                StonkClass::War,
-                "Marasma".into(),
-                12000,
-                16000,
-                0.000,
-                0.00025,
-                0.001,
-                0.005,
-            ),
-            Market::new_stonk(
-                6,
-                StonkClass::Commodity,
-                "Yuppies we are".into(),
-                80000,
-                17000,
-                0.001,
-                0.001,
-                0.0009,
-                0.15,
-            ),
-            Market::new_stonk(
-                7,
-                StonkClass::Commodity,
-                "Cannoli Magici".into(),
-                12000,
-                10000,
-                0.001,
-                0.0005,
-                0.01,
-                0.05,
-            ),
-        ];
+        let stonks = load_stonks_data().expect("Failed to load stonks from data");
 
         let m = Market {
             stonks,
@@ -250,10 +156,8 @@ impl Market {
     }
 
     fn tick_night(&mut self, _rng: &mut ChaCha8Rng) {}
-}
 
-impl StonkMarket for Market {
-    fn tick(&mut self) {
+    pub fn tick(&mut self) {
         debug!("\nMarket tick {:?}", self.phase);
         let rng = &mut ChaCha8Rng::from_entropy();
         match self.phase {
@@ -285,7 +189,7 @@ impl StonkMarket for Market {
         }
     }
 
-    fn apply_agent_action<A: DecisionAgent>(&mut self, agent: &mut A) -> AppResult<()> {
+    pub fn apply_agent_action<A: DecisionAgent>(&mut self, agent: &mut A) -> AppResult<()> {
         if let Some(action) = agent.selected_action() {
             agent.clear_action();
             info!("Applying action {:?}", action);
