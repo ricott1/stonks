@@ -313,15 +313,15 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
             Style::default()
         };
 
-        let agent_share = stonk.to_stake(agent);
+        let agent_share = stonk.to_stake(agent.owned_stonks()[stonk.id]);
 
-        let agent_style = if agent_share >= 5.0 {
+        let agent_style = if agent_share >= 0.05 {
             Style::default().magenta()
-        } else if agent_share >= 1.0 {
+        } else if agent_share >= 0.05 {
             Style::default().light_magenta()
-        } else if agent_share >= 0.1 {
+        } else if agent_share >= 0.001 {
             Style::default().cyan()
-        } else if agent_share >= 0.01 {
+        } else if agent_share >= 0.001 {
             Style::default().light_cyan()
         } else {
             Style::default()
@@ -337,6 +337,27 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
             Style::default()
         };
 
+        let top_shareholders = stonk
+            .shareholders
+            .iter()
+            .take(3)
+            .map(|(holder, amount)| {
+                let agent_share = stonk.to_stake(*amount);
+                let agent_style = if agent_share >= 0.05 {
+                    Style::default().magenta()
+                } else if agent_share >= 0.05 {
+                    Style::default().light_magenta()
+                } else if agent_share >= 0.001 {
+                    Style::default().cyan()
+                } else if agent_share >= 0.001 {
+                    Style::default().light_cyan()
+                } else {
+                    Style::default()
+                };
+                Line::from(format!("{} {:.2}%", holder, agent_share * 100.0)).style(agent_style)
+            })
+            .collect::<Vec<Line>>();
+
         Row::new(vec![
             Cell::new(format!("\n{}", stonk.name)),
             Cell::new(format!("\n${:.2}", stonk.formatted_buy_price())).style(style),
@@ -345,12 +366,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
             Cell::new(format!("\n{:+.2}%", max_variation)).style(max_style),
             Cell::new(format!("\n{:.2}%", agent_share * 100.0)).style(agent_style),
             Cell::new(format!("\n${}", agent_stonk_value)).style(agent_stonk_style),
-            Cell::new(vec![
-                Line::from(format!("${}", agent_stonk_value)),
-                Line::from(format!("${}", agent_stonk_value)),
-                Line::from(format!("${}", agent_stonk_value)),
-            ])
-            .style(agent_stonk_style),
+            Cell::new(top_shareholders),
         ])
         .style(Style::new().fg(colors.row_fg).bg(color))
         .height(3)
@@ -697,7 +713,7 @@ fn render_header(
                 format!(
                     "Owned shares {} ({:.02}%) ",
                     amount,
-                    stonk.to_stake(agent) * 100.0
+                    stonk.to_stake(agent.owned_stonks()[stonk.id]) * 100.0
                 )
             } else {
                 format!(

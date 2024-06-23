@@ -83,6 +83,8 @@ impl NightEvent {
 }
 
 pub trait DecisionAgent {
+    fn username(&self) -> &str;
+
     fn cash(&self) -> u32;
     fn add_cash(&mut self, amount: u32) -> AppResult<u32>;
     fn sub_cash(&mut self, amount: u32) -> AppResult<u32>;
@@ -118,16 +120,16 @@ impl UserAgent {
         }
     }
 
-    pub fn username(&self) -> &str {
-        &self.session_auth.username
-    }
-
     pub fn formatted_cash(&self) -> f64 {
         self.cash as f64 / 100.0
     }
 }
 
 impl DecisionAgent for UserAgent {
+    fn username(&self) -> &str {
+        &self.session_auth.username
+    }
+
     fn cash(&self) -> u32 {
         self.cash
     }

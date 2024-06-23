@@ -354,13 +354,13 @@ impl AppServer {
                     last_market_tick = SystemTime::now();
                 }
 
-                for stonk in market.stonks.iter_mut() {
-                    let allocated_shares = agents
-                        .iter()
-                        .map(|(_, agent)| agent.owned_stonks()[stonk.id])
-                        .sum::<u32>();
-                    stonk.allocated_shares = allocated_shares;
-                }
+                // for stonk in market.stonks.iter_mut() {
+                //     let allocated_shares = agents
+                //         .iter()
+                //         .map(|(_, agent)| agent.owned_stonks()[stonk.id])
+                //         .sum::<u32>();
+                //     stonk.allocated_shares = allocated_shares;
+                // }
 
                 // Draw to client TUI
                 let number_of_players = clients.len();

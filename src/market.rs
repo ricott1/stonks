@@ -299,7 +299,9 @@ impl StonkMarket for Market {
                     let cost = stonk.buy_price() * amount;
                     agent.sub_cash(cost)?;
                     agent.add_stonk(stonk_id, amount)?;
-                    let bump_amount = stonk.to_stake(agent);
+                    stonk.allocate_shares(agent.username(), amount)?;
+
+                    let bump_amount = stonk.to_stake(agent.owned_stonks()[stonk.id]);
                     stonk.add_condition(
                         StonkCondition::Bump {
                             amount: bump_amount,
@@ -312,7 +314,9 @@ impl StonkMarket for Market {
                     let cost = stonk.sell_price() * amount;
                     agent.sub_stonk(stonk_id, amount)?;
                     agent.add_cash(cost)?;
-                    let bump_amount = stonk.to_stake(agent);
+                    stonk.deallocate_shares(agent.username(), amount)?;
+
+                    let bump_amount = stonk.to_stake(agent.owned_stonks()[stonk.id]);
                     stonk.add_condition(
                         StonkCondition::Bump {
                             amount: -bump_amount,

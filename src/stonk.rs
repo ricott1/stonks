@@ -1,9 +1,8 @@
+use crate::utils::AppResult;
 use rand::Rng;
 use rand_distr::{Cauchy, Distribution, Normal};
 use serde::{Deserialize, Serialize};
-use tracing::debug;
-
-use crate::agent::DecisionAgent;
+use tracing::{debug, info};
 
 const MIN_DRIFT: f64 = -0.2;
 const MAX_DRIFT: f64 = -MIN_DRIFT;
@@ -34,7 +33,8 @@ pub struct Stonk {
     pub name: String,
     pub price_per_share_in_cents: u32, //price is to be intended in cents, and displayed accordingly
     number_of_shares: u32,
-    pub allocated_shares: u32,
+    allocated_shares: u32,
+    pub shareholders: Vec<(String, u32)>, // List of shareholders, always sorted from biggest to smallest.
     drift: f64,            // Cauchy dist mean, changes the mean price percentage variation
     drift_volatility: f64, // Influences the rate of change of drift, must be positive
     volatility: f64, // Cauchy dist variance, changes the variance of the price percentage variation, must be positive
@@ -45,6 +45,10 @@ pub struct Stonk {
 }
 
 impl Stonk {
+    fn sort_shareholders(&mut self) {
+        self.shareholders.sort_by(|(_, a), (_, b)| b.cmp(a))
+    }
+
     pub fn new(
         id: usize,
         class: StonkClass,
@@ -63,6 +67,7 @@ impl Stonk {
             price_per_share_in_cents,
             number_of_shares,
             allocated_shares: 0,
+            shareholders: vec![],
             drift,
             drift_volatility,
             volatility: volatility.max(0.001).min(0.99),
@@ -73,8 +78,8 @@ impl Stonk {
         }
     }
 
-    pub fn to_stake(&self, agent: &dyn DecisionAgent) -> f64 {
-        agent.owned_stonks()[self.id] as f64 / self.number_of_shares as f64
+    pub fn to_stake(&self, amount: u32) -> f64 {
+        amount as f64 / self.number_of_shares as f64
     }
     pub fn market_cap(&self) -> u32 {
         self.price_per_share_in_cents as u32 * self.number_of_shares as u32
@@ -82,6 +87,44 @@ impl Stonk {
 
     pub fn available_amount(&self) -> u32 {
         self.number_of_shares - self.allocated_shares
+    }
+
+    pub fn allocate_shares(&mut self, username: &str, amount: u32) -> AppResult<()> {
+        if amount > self.available_amount() {
+            return Err("Amount is greater than number of available shares.".into());
+        }
+        if let Some((_, old_amount)) = self
+            .shareholders
+            .iter_mut()
+            .find(|(holder, _)| *holder == username.to_string())
+        {
+            *old_amount += amount
+        } else {
+            self.shareholders.push((username.to_string(), amount))
+        }
+        self.sort_shareholders();
+
+        info!("New shareholders: {:#?}", self.shareholders);
+        Ok(())
+    }
+
+    pub fn deallocate_shares(&mut self, username: &str, amount: u32) -> AppResult<()> {
+        if let Some((_, old_amount)) = self
+            .shareholders
+            .iter_mut()
+            .find(|(holder, _)| *holder == username.to_string())
+        {
+            if amount > *old_amount {
+                return Err("Amount is greater than number of shares owned by agent.".into());
+            }
+            *old_amount -= amount
+        } else {
+            return Err("Agent is not a shareholder".into());
+        }
+        self.sort_shareholders();
+        info!("New shareholders: {:#?}", self.shareholders);
+
+        Ok(())
     }
 
     pub fn apply_conditions(&mut self, current_tick: usize) {
