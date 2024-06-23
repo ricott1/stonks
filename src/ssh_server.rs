@@ -258,8 +258,11 @@ impl AppServer {
             save_market(&m)?;
             m
         } else {
-            load_market().unwrap_or_default()
+            let m = load_market().unwrap_or_default();
+            info!("Loading market. Starting back from {:#?}", m.phase);
+            m
         };
+
         let agents = if reset {
             let agents = AgentsDatabase::default();
             save_agents(&agents)?;
@@ -321,6 +324,7 @@ impl AppServer {
                         GamePhase::Day { .. } => {
                             client.ui_options.render_counter = 0;
                             client.ui_options.selected_event_card_index = None;
+                            agent.set_available_night_events(vec![]);
                             if let Some(_) = agent.selected_action() {
                                 market
                                     .apply_agent_action::<UserAgent>(agent)
@@ -338,6 +342,8 @@ impl AppServer {
                                 let mut events = NightEvent::iter()
                                     .filter(|e| e.unlock_condition()(agent, &market))
                                     .collect::<Vec<NightEvent>>();
+
+                                info!("Got events {:#?}", events);
                                 events.shuffle(&mut rand::thread_rng());
                                 events = events
                                     .iter()

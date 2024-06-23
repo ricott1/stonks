@@ -31,6 +31,7 @@ pub struct Stonk {
     pub id: usize,
     pub class: StonkClass,
     pub name: String,
+    pub short_name: String,
     pub description: String,
     pub price_per_share_in_cents: u32, //price is to be intended in cents, and displayed accordingly
     number_of_shares: u32,
@@ -48,36 +49,6 @@ pub struct Stonk {
 impl Stonk {
     fn sort_shareholders(&mut self) {
         self.shareholders.sort_by(|(_, a), (_, b)| b.cmp(a))
-    }
-
-    pub fn new(
-        id: usize,
-        class: StonkClass,
-        name: String,
-        price_per_share_in_cents: u32,
-        number_of_shares: u32,
-        drift: f64,
-        drift_volatility: f64,
-        volatility: f64,
-        shock_probability: f64,
-    ) -> Self {
-        Self {
-            id,
-            class,
-            name,
-            description: "".to_string(),
-            price_per_share_in_cents,
-            number_of_shares,
-            allocated_shares: 0,
-            shareholders: vec![],
-            drift,
-            drift_volatility,
-            volatility: volatility.max(0.001).min(0.99),
-            shock_probability,
-            starting_price: price_per_share_in_cents,
-            historical_prices: vec![],
-            conditions: vec![],
-        }
     }
 
     pub fn to_stake(&self, amount: u32) -> f64 {

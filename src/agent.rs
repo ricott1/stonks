@@ -7,6 +7,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum_macros::EnumIter;
+use tracing::info;
 
 const INITIAL_USER_CASH_CENTS: u32 = 10000 * 100;
 
@@ -45,6 +46,16 @@ impl Display for NightEvent {
 }
 
 impl NightEvent {
+    pub fn title(&self) -> &str {
+        match self {
+            Self::War => "WAR",
+            Self::ColdWinter => "COLD WINTER",
+            Self::RoyalScandal => "ROYAL SCANDAL",
+            Self::PurpleBlockchain => "PURPLE BLOCKCHAIN",
+            Self::MarketCrash => "MARKET CRASH",
+        }
+    }
+
     pub fn description(&self) -> Vec<&str> {
         let mut description = match self {
             Self::War => vec![
@@ -59,16 +70,17 @@ impl NightEvent {
                 "much for global warming!",
             ],
             Self::RoyalScandal => vec![
-                "Apparently next winter",
-                "is gonna be very cold,",
-                "better prepare soon. So",
-                "much for global warming!",
+                "A juicy scandal will hit",
+                "every frontpage tomorrow.",
+                "Media stonks will surely",
+                "sell some extra!",
             ],
             Self::PurpleBlockchain => vec![
-                "Apparently next winter",
-                "is gonna be very cold,",
-                "better prepare soon. So",
-                "much for global warming!",
+                "Didn't you hear?",
+                "Blockchains are gonna smash",
+                "away the rotten banks.",
+                "Just put it on chain,",
+                "and make it purple.",
             ],
             Self::MarketCrash => vec![
                 "It's 1929 all over again,",
@@ -78,7 +90,7 @@ impl NightEvent {
             ],
         };
 
-        description.extend(vec!["Unlock Condition:"].iter());
+        description.extend(vec!["", "Unlock Condition:"].iter());
         description.extend(self.unlock_condition_description().iter());
 
         description
@@ -142,7 +154,7 @@ impl NightEvent {
                     / tech_stonks.len() as f64
                     >= 1.0
             }),
-            Self::MarketCrash => Box::new(|agent, _| agent.cash() >= 100000),
+            Self::MarketCrash => Box::new(|agent, _| agent.cash() >= 100_000 * 100),
         }
     }
 
@@ -152,7 +164,7 @@ impl NightEvent {
             Self::ColdWinter => vec!["Average share in", "Commodity stonks >= 1%"],
             Self::RoyalScandal => vec!["Average share in", "Media stonks >= 1%"],
             Self::PurpleBlockchain => vec!["Average share in", "Technology stonks >= 1%"],
-            Self::MarketCrash => vec!["Total cash >= 100000"],
+            Self::MarketCrash => vec!["Total cash >= $100000"],
         }
     }
 
@@ -270,6 +282,7 @@ impl DecisionAgent for UserAgent {
         if self.pending_action.is_none() {
             self.pending_action = Some(action);
         }
+        info!("Agent selected action: {:#?}", action);
     }
 
     fn selected_action(&self) -> Option<AgentAction> {

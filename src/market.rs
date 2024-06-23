@@ -1,6 +1,6 @@
 use crate::{
     agent::{AgentAction, DecisionAgent},
-    stonk::{Stonk, StonkClass, StonkCondition},
+    stonk::{Stonk, StonkCondition},
     utils::{load_stonks_data, AppResult},
 };
 use rand::{Rng, SeedableRng};
@@ -110,30 +110,6 @@ impl Market {
         m
     }
 
-    pub fn new_stonk(
-        id: usize,
-        class: StonkClass,
-        name: String,
-        price_per_share_in_cents: u32,
-        number_of_shares: u32,
-        drift: f64,
-        drift_volatility: f64,
-        volatility: f64,
-        shock_probability: f64,
-    ) -> Stonk {
-        Stonk::new(
-            id,
-            class,
-            name,
-            price_per_share_in_cents,
-            number_of_shares,
-            drift,
-            drift_volatility,
-            volatility,
-            shock_probability,
-        )
-    }
-
     pub fn tick_day(&mut self, rng: &mut ChaCha8Rng) {
         let global_drift = if self.last_tick % DAY_LENGTH == 0 {
             Some(rng.gen_range(-0.01..0.01))
@@ -231,7 +207,7 @@ impl Market {
                 AgentAction::BumpStonkClass { class } => {
                     for stonk in self.stonks.iter_mut().filter(|s| s.class == class) {
                         stonk.add_condition(
-                            StonkCondition::Bump { amount: 1.0 },
+                            StonkCondition::Bump { amount: 5.0 },
                             self.last_tick + DAY_LENGTH,
                         )
                     }

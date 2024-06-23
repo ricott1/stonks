@@ -246,7 +246,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
             _ => colors.alt_row_color,
         };
 
-        let n = market.last_tick % DAY_LENGTH;
+        let n = stonk.historical_prices.len() % DAY_LENGTH;
         let style = if n > 0 {
             let last_n_prices = stonk.historical_prices.iter().rev().take(n);
             let last_len = last_n_prices.len() as f64;
@@ -528,9 +528,18 @@ fn render_night(
                     }
                 }
 
-                let mut lines =
-                    vec![Line::from(selected_event.to_string().to_ascii_uppercase())
-                        .style(border_style)];
+                let title_style = if agent.selected_action().is_some() {
+                    Style::default().green()
+                } else {
+                    Style::default().red()
+                };
+                let mut lines = vec![
+                    Line::from(Span::styled(
+                        selected_event.to_string().to_ascii_uppercase(),
+                        title_style,
+                    )),
+                    Line::from(""),
+                ];
                 for l in selected_event.description().iter() {
                     lines.push(Line::from(*l).bold().black());
                 }
@@ -776,7 +785,10 @@ fn render_stonk_info(
         ui_options.selected_stonk_index
     };
     let stonk = &market.stonks[stonk_id];
-    frame.render_widget(Paragraph::new(stonk.description.clone()), area);
+    frame.render_widget(
+        Paragraph::new(stonk.description.clone()).wrap(Wrap { trim: true }),
+        area,
+    );
 }
 
 fn render_footer(
@@ -889,7 +901,7 @@ pub fn render(
     ])
     .split(area);
 
-    self::render_header(
+    render_header(
         frame,
         market,
         agent,
@@ -901,15 +913,17 @@ pub fn render(
     match ui_options.display {
         UiDisplay::Portfolio => {}
         UiDisplay::Stonks => match market.phase {
-            GamePhase::Day { .. } => render_day(frame, market, agent, ui_options, split[1])?,
+            GamePhase::Day { .. } => {
+                render_day(frame, market, agent, ui_options, split[1])?;
+                render_stonk_info(frame, market, agent, ui_options, split[2]);
+            }
             GamePhase::Night { counter, .. } => {
                 render_night(frame, counter, agent, ui_options, split[1])?
             }
         },
     }
 
-    self::render_stonk_info(frame, market, agent, ui_options, split[2]);
-    self::render_footer(frame, market, agent, ui_options, split[3]);
+    render_footer(frame, market, agent, ui_options, split[3]);
 
     Ok(())
 }
