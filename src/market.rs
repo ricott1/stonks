@@ -24,6 +24,8 @@ pub const NIGHT_LENGTH: usize = TICKS_PER_HOUR * NIGHT_LENGTH_HOURS; // NIGHT_LE
 pub const HISTORICAL_SIZE: usize = DAY_LENGTH * 7 * 12;
 pub const NUMBER_OF_STONKS: usize = 8;
 
+const BRIBE_AMOUNT: u32 = 10_000 * 100;
+
 #[derive(Debug, Clone, Copy, Display, EnumIter)]
 enum Season {
     Spring,
@@ -233,7 +235,7 @@ impl Market {
                 }
 
                 AgentAction::AcceptBribe => {
-                    agent.add_cash(10_000)?;
+                    agent.add_cash(BRIBE_AMOUNT)?;
                 }
 
                 AgentAction::OneDayUltraVision => {

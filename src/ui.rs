@@ -528,10 +528,13 @@ fn render_night(
                     }
                 }
 
-                let title_style = if agent.selected_action().is_some() {
+                let title_style = if agent.selected_action().is_some()
+                    && ui_options.selected_event_card_index.is_some()
+                    && ui_options.selected_event_card_index.unwrap() == i
+                {
                     Style::default().green()
                 } else {
-                    Style::default().red()
+                    Style::default()
                 };
                 let mut lines = vec![
                     Line::from(Span::styled(

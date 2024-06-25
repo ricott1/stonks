@@ -3,9 +3,12 @@ use crate::{
     market::{Market, NUMBER_OF_STONKS},
     stonk::{Stonk, StonkClass},
 };
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum_macros::EnumIter;
+
+const A_GOOD_OFFER_PROBABILITY: f64 = 0.99994;
 
 #[derive(Debug, Clone, EnumIter, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum NightEvent {
@@ -193,6 +196,10 @@ impl NightEvent {
                     .get(&AgentAction::AcceptBribe.to_string())
                     .is_none()
                     && agent.cash() < 1000 * 100
+                    && {
+                        let rng = &mut rand::thread_rng();
+                        rng.gen_bool(A_GOOD_OFFER_PROBABILITY)
+                    }
             }),
         }
     }
@@ -248,7 +255,9 @@ impl NightEvent {
             Self::CharacterAssassination { agent_stonks, .. } => AgentAction::CrashAgentStonks {
                 agent_stonks: *agent_stonks,
             },
-            Self::AGoodOffer => AgentAction::AddCash { amount: 10000 },
+            Self::AGoodOffer => AgentAction::AddCash {
+                amount: 10000 * 100,
+            },
         }
     }
 }
