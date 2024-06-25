@@ -1,4 +1,4 @@
-use crate::agent::{DecisionAgent, UserAgent};
+use crate::agent::{AgentCondition, DecisionAgent, UserAgent};
 use crate::market::{
     GamePhase, Market, DAY_LENGTH, HISTORICAL_SIZE, MAX_EVENTS_PER_NIGHT, NIGHT_LENGTH,
 };
@@ -468,14 +468,14 @@ fn render_night(
                     }),
                 );
             } else {
-                let selected_event = agent.available_night_events()[i];
+                let selected_event = agent.available_night_events()[i].clone();
                 let border_style = if agent.selected_action().is_some() {
                     Style::default().green().on_green()
                 } else {
                     Style::default().red().on_red()
                 };
-                if agent.selected_action().is_some() {
-                    if agent.selected_action().unwrap() == selected_event.action() {
+                if let Some(action) = agent.selected_action().cloned() {
+                    if action == selected_event.action() {
                         frame.render_widget(
                             Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone())
                                 .block(Block::bordered().border_style(border_style)),
@@ -540,8 +540,10 @@ fn render_night(
                     )),
                     Line::from(""),
                 ];
-                for l in selected_event.description().iter() {
-                    lines.push(Line::from(*l).bold().black());
+
+                let description = selected_event.description();
+                for l in description.iter() {
+                    lines.push(Line::from(l.as_str()).bold().black());
                 }
 
                 frame.render_widget(
@@ -686,7 +688,11 @@ fn render_stonk(
         .map(|v| v.to_string().bold())
         .collect();
 
-    let chart_title = stonk.info(agent.owned_stonks()[stonk.id]);
+    let stonk_info = if agent.has_condition(AgentCondition::UltraVision) {
+        stonk.info(stonk.number_of_shares)
+    } else {
+        stonk.info(agent.owned_stonks()[stonk.id])
+    };
 
     let chart = Chart::new(datasets)
         .block(
@@ -705,7 +711,7 @@ fn render_stonk(
         )
         .y_axis(
             Axis::default()
-                .title(chart_title)
+                .title(stonk_info)
                 .style(Style::default().gray())
                 .labels(y_labels)
                 .bounds([min_y_bound as f64, max_y_bound as f64]),
@@ -868,7 +874,7 @@ fn render_footer(
             );
         }
         GamePhase::Night { .. } => {
-            if let Some(action) = agent.selected_action() {
+            if let Some(action) = agent.selected_action().cloned() {
                 for event in agent.available_night_events().iter() {
                     if event.action() == action {
                         lines.push(format!("You selected `{}`", event).into());

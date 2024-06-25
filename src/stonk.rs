@@ -7,7 +7,7 @@ use tracing::{debug, info};
 const MIN_DRIFT: f64 = -0.2;
 const MAX_DRIFT: f64 = -MIN_DRIFT;
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum StonkClass {
     Media,
     War,
@@ -34,7 +34,7 @@ pub struct Stonk {
     pub short_name: String,
     pub description: String,
     pub price_per_share_in_cents: u32, //price is to be intended in cents, and displayed accordingly
-    number_of_shares: u32,
+    pub number_of_shares: u32,
     allocated_shares: u32,
     pub shareholders: Vec<(String, u32)>, // List of shareholders, always sorted from biggest to smallest.
     drift: f64,            // Cauchy dist mean, changes the mean price percentage variation

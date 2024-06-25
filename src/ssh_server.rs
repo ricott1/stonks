@@ -1,4 +1,5 @@
-use crate::agent::{AgentAction, DecisionAgent, NightEvent, UserAgent};
+use crate::agent::{AgentAction, DecisionAgent, UserAgent};
+use crate::events::NightEvent;
 use crate::market::{GamePhase, Market, HISTORICAL_SIZE, MAX_EVENTS_PER_NIGHT};
 use crate::ssh_backend::SSHBackend;
 use crate::tui::Tui;
@@ -25,7 +26,6 @@ use tracing::{debug, error, info};
 pub type Password = u64;
 pub type AgentsDatabase = HashMap<String, UserAgent>;
 
-const SERVER_SSH_PORT: u16 = 3333;
 const CLIENTS_DROPOUT_TIME_SECONDS: u64 = 60 * 10;
 const PERSISTED_CLIENTS_DROPOUT_TIME_SECONDS: u64 = 60 * 60 * 24;
 const STORE_TO_DISK_INTERVAL_SECONDS: u64 = 60;
@@ -119,7 +119,8 @@ impl Client {
                         if agent.selected_action().is_none() {
                             if let Some(idx) = self.ui_options.selected_event_card_index {
                                 if idx < agent.available_night_events().len() {
-                                    let action = agent.available_night_events()[idx].action();
+                                    let event = agent.available_night_events()[idx].clone();
+                                    let action = event.action();
                                     agent.select_action(action);
                                 }
                             }
@@ -280,7 +281,7 @@ impl AppServer {
         })
     }
 
-    pub async fn run(&mut self) -> AppResult<()> {
+    pub async fn run(&mut self, port: u16) -> AppResult<()> {
         info!("Starting SSH server. Press Ctrl-C to exit.");
         let clients = self.clients.clone();
         let agents = self.agents.clone();
@@ -296,6 +297,11 @@ impl AppServer {
                 let mut clients = clients.lock().await;
                 let mut agents = agents.lock().await;
                 let mut market = market.lock().await;
+
+                // let mut character_assassination_candidates = vec![];
+                // for stonk in market.stonks.iter() {
+                //     for (username, share) in stonk.shareholders.iter().take(5) {}
+                // }
 
                 // Apply agent actions and update events.
                 // If the client did not do anything recently, it wil removed.
@@ -348,7 +354,7 @@ impl AppServer {
                                 events = events
                                     .iter()
                                     .take(MAX_EVENTS_PER_NIGHT)
-                                    .map(|e| *e)
+                                    .map(|e| e.clone())
                                     .collect::<Vec<NightEvent>>();
 
                                 agent.set_available_night_events(events);
@@ -428,14 +434,14 @@ impl AppServer {
         let key_pair = russh_keys::key::KeyPair::Ed25519(signing_key);
 
         let config = Config {
-            inactivity_timeout: Some(std::time::Duration::from_secs(360)),
+            inactivity_timeout: Some(std::time::Duration::from_secs(10)),
             auth_rejection_time: std::time::Duration::from_secs(2),
             auth_rejection_time_initial: Some(std::time::Duration::from_secs(0)),
             keys: vec![key_pair],
             ..Default::default()
         };
 
-        self.run_on_address(Arc::new(config), ("0.0.0.0", SERVER_SSH_PORT))
+        self.run_on_address(Arc::new(config), ("0.0.0.0", port))
             .await?;
 
         Ok(())

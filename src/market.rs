@@ -1,5 +1,5 @@
 use crate::{
-    agent::{AgentAction, DecisionAgent},
+    agent::{AgentAction, AgentCondition, DecisionAgent},
     stonk::{Stonk, StonkCondition},
     utils::{load_stonks_data, AppResult},
 };
@@ -166,20 +166,21 @@ impl Market {
     }
 
     pub fn apply_agent_action<A: DecisionAgent>(&mut self, agent: &mut A) -> AppResult<()> {
-        if let Some(action) = agent.selected_action() {
+        if let Some(action) = agent.selected_action().cloned().as_ref() {
             agent.clear_action();
             info!("Applying action {:?}", action);
+
             match action {
                 AgentAction::Buy { stonk_id, amount } => {
-                    let stonk = &mut self.stonks[stonk_id];
+                    let stonk = &mut self.stonks[*stonk_id];
                     let max_amount = stonk.available_amount();
-                    if max_amount < amount {
+                    if max_amount < *amount {
                         return Err("Not enough shares available".into());
                     }
                     let cost = stonk.buy_price() * amount;
                     agent.sub_cash(cost)?;
-                    agent.add_stonk(stonk_id, amount)?;
-                    stonk.allocate_shares(agent.username(), amount)?;
+                    agent.add_stonk(*stonk_id, *amount)?;
+                    stonk.allocate_shares(agent.username(), *amount)?;
 
                     let bump_amount = stonk.to_stake(agent.owned_stonks()[stonk.id]);
                     stonk.add_condition(
@@ -190,11 +191,11 @@ impl Market {
                     );
                 }
                 AgentAction::Sell { stonk_id, amount } => {
-                    let stonk = &mut self.stonks[stonk_id];
+                    let stonk = &mut self.stonks[*stonk_id];
                     let cost = stonk.sell_price() * amount;
-                    agent.sub_stonk(stonk_id, amount)?;
+                    agent.sub_stonk(*stonk_id, *amount)?;
                     agent.add_cash(cost)?;
-                    stonk.deallocate_shares(agent.username(), amount)?;
+                    stonk.deallocate_shares(agent.username(), *amount)?;
 
                     let bump_amount = stonk.to_stake(agent.owned_stonks()[stonk.id]);
                     stonk.add_condition(
@@ -205,7 +206,7 @@ impl Market {
                     );
                 }
                 AgentAction::BumpStonkClass { class } => {
-                    for stonk in self.stonks.iter_mut().filter(|s| s.class == class) {
+                    for stonk in self.stonks.iter_mut().filter(|s| s.class == *class) {
                         stonk.add_condition(
                             StonkCondition::Bump { amount: 5.0 },
                             self.last_tick + DAY_LENGTH,
@@ -227,7 +228,36 @@ impl Market {
                         )
                     }
                 }
+                AgentAction::AddCash { amount } => {
+                    agent.add_cash(*amount)?;
+                }
+
+                AgentAction::AcceptBribe => {
+                    agent.add_cash(10_000)?;
+                }
+
+                AgentAction::OneDayUltraVision => {
+                    agent.add_condition(AgentCondition::UltraVision, self.last_tick + DAY_LENGTH)
+                }
+                AgentAction::CrashAgentStonks { agent_stonks } => {
+                    for (stonk_id, &amount) in agent_stonks.iter().enumerate() {
+                        let stonk = &mut self.stonks[stonk_id];
+                        let stake = stonk.to_stake(amount);
+                        stonk.add_condition(
+                            StonkCondition::Bump { amount: stake },
+                            self.last_tick + DAY_LENGTH,
+                        );
+                        stonk.add_condition(
+                            StonkCondition::SetShockProbability {
+                                value: (stonk.shock_probability * 4.0).min(1.0),
+                                previous_shock_probability: stonk.shock_probability,
+                            },
+                            self.last_tick + DAY_LENGTH,
+                        );
+                    }
+                }
             }
+            agent.insert_past_selected_actions(action.clone(), self.last_tick);
         }
         Ok(())
     }

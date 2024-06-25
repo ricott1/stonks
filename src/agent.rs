@@ -1,190 +1,42 @@
+use std::collections::HashMap;
+
 use crate::{
-    market::{Market, NUMBER_OF_STONKS},
-    ssh_server::SessionAuth,
-    stonk::{Stonk, StonkClass},
+    events::NightEvent, market::NUMBER_OF_STONKS, ssh_server::SessionAuth, stonk::StonkClass,
     utils::AppResult,
 };
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
-use strum_macros::EnumIter;
 use tracing::info;
 
 const INITIAL_USER_CASH_CENTS: u32 = 10000 * 100;
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum AgentAction {
-    Buy { stonk_id: usize, amount: u32 },
-    Sell { stonk_id: usize, amount: u32 },
-    BumpStonkClass { class: StonkClass },
+    Buy {
+        stonk_id: usize,
+        amount: u32,
+    },
+    Sell {
+        stonk_id: usize,
+        amount: u32,
+    },
+    BumpStonkClass {
+        class: StonkClass,
+    },
     CrashAll,
+    OneDayUltraVision,
+    CrashAgentStonks {
+        agent_stonks: [u32; NUMBER_OF_STONKS],
+    },
+    AddCash {
+        amount: u32,
+    },
+    AcceptBribe,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum AgentCondition {
-    Prison { until_tick: usize },
-}
-
-#[derive(Debug, Clone, Copy, EnumIter, PartialEq, Serialize, Deserialize)]
-pub enum NightEvent {
-    War,
-    ColdWinter,
-    RoyalScandal,
-    PurpleBlockchain,
-    MarketCrash,
-}
-
-impl Display for NightEvent {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::War => write!(f, "War"),
-            Self::ColdWinter => write!(f, "Cold winter"),
-            Self::RoyalScandal => write!(f, "Royal scandal"),
-            Self::PurpleBlockchain => write!(f, "Purple blockchain"),
-            Self::MarketCrash => write!(f, "Market crash"),
-        }
-    }
-}
-
-impl NightEvent {
-    pub fn title(&self) -> &str {
-        match self {
-            Self::War => "WAR",
-            Self::ColdWinter => "COLD WINTER",
-            Self::RoyalScandal => "ROYAL SCANDAL",
-            Self::PurpleBlockchain => "PURPLE BLOCKCHAIN",
-            Self::MarketCrash => "MARKET CRASH",
-        }
-    }
-
-    pub fn description(&self) -> Vec<&str> {
-        let mut description = match self {
-            Self::War => vec![
-                "It's war time!",
-                "Chance for all war stonks",
-                "to get a big bump.",
-            ],
-            Self::ColdWinter => vec![
-                "Apparently next winter",
-                "is gonna be very cold,",
-                "better prepare soon. So",
-                "much for global warming!",
-            ],
-            Self::RoyalScandal => vec![
-                "A juicy scandal will hit",
-                "every frontpage tomorrow.",
-                "Media stonks will surely",
-                "sell some extra!",
-            ],
-            Self::PurpleBlockchain => vec![
-                "Didn't you hear?",
-                "Blockchains are gonna smash",
-                "away the rotten banks.",
-                "Just put it on chain,",
-                "and make it purple.",
-            ],
-            Self::MarketCrash => vec![
-                "It's 1929 all over again,",
-                "or was it 1987?",
-                "Or 2001? Or 2008?",
-                "Or...",
-            ],
-        };
-
-        description.extend(vec!["", "Unlock Condition:"].iter());
-        description.extend(self.unlock_condition_description().iter());
-
-        description
-    }
-
-    pub fn unlock_condition(&self) -> Box<dyn Fn(&dyn DecisionAgent, &Market) -> bool> {
-        match self {
-            Self::War => Box::new(|agent, market| {
-                let war_stonks = market
-                    .stonks
-                    .iter()
-                    .filter(|s| s.class == StonkClass::War)
-                    .collect::<Vec<&Stonk>>();
-
-                war_stonks
-                    .iter()
-                    .map(|s| 100.0 * s.to_stake(agent.owned_stonks()[s.id]))
-                    .sum::<f64>()
-                    / war_stonks.len() as f64
-                    >= 1.0
-            }),
-            Self::ColdWinter => Box::new(|agent, market| {
-                let commodity_stonks = market
-                    .stonks
-                    .iter()
-                    .filter(|s| s.class == StonkClass::Commodity)
-                    .collect::<Vec<&Stonk>>();
-
-                commodity_stonks
-                    .iter()
-                    .map(|s| 100.0 * s.to_stake(agent.owned_stonks()[s.id]))
-                    .sum::<f64>()
-                    / commodity_stonks.len() as f64
-                    >= 1.0
-            }),
-            Self::RoyalScandal => Box::new(|agent, market| {
-                let media_stonks = market
-                    .stonks
-                    .iter()
-                    .filter(|s| s.class == StonkClass::Media)
-                    .collect::<Vec<&Stonk>>();
-
-                media_stonks
-                    .iter()
-                    .map(|s| 100.0 * s.to_stake(agent.owned_stonks()[s.id]))
-                    .sum::<f64>()
-                    / media_stonks.len() as f64
-                    >= 1.0
-            }),
-            Self::PurpleBlockchain => Box::new(|agent, market| {
-                let tech_stonks = market
-                    .stonks
-                    .iter()
-                    .filter(|s| s.class == StonkClass::Technology)
-                    .collect::<Vec<&Stonk>>();
-
-                tech_stonks
-                    .iter()
-                    .map(|s| 100.0 * s.to_stake(agent.owned_stonks()[s.id]))
-                    .sum::<f64>()
-                    / tech_stonks.len() as f64
-                    >= 1.0
-            }),
-            Self::MarketCrash => Box::new(|agent, _| agent.cash() >= 100_000 * 100),
-        }
-    }
-
-    fn unlock_condition_description(&self) -> Vec<&str> {
-        match self {
-            Self::War => vec!["Average share in", "War stonks >= 1%"],
-            Self::ColdWinter => vec!["Average share in", "Commodity stonks >= 1%"],
-            Self::RoyalScandal => vec!["Average share in", "Media stonks >= 1%"],
-            Self::PurpleBlockchain => vec!["Average share in", "Technology stonks >= 1%"],
-            Self::MarketCrash => vec!["Total cash >= $100000"],
-        }
-    }
-
-    pub fn action(&self) -> AgentAction {
-        match self {
-            Self::War => AgentAction::BumpStonkClass {
-                class: StonkClass::War,
-            },
-            Self::ColdWinter => AgentAction::BumpStonkClass {
-                class: StonkClass::Commodity,
-            },
-            Self::RoyalScandal => AgentAction::BumpStonkClass {
-                class: StonkClass::Media,
-            },
-            Self::PurpleBlockchain => AgentAction::BumpStonkClass {
-                class: StonkClass::Technology,
-            },
-            Self::MarketCrash => AgentAction::CrashAll,
-        }
-    }
+    Prison,
+    UltraVision,
 }
 
 pub trait DecisionAgent {
@@ -198,11 +50,18 @@ pub trait DecisionAgent {
     fn sub_stonk(&mut self, stonk_id: usize, amount: u32) -> AppResult<&[u32; NUMBER_OF_STONKS]>;
 
     fn select_action(&mut self, action: AgentAction);
-    fn selected_action(&self) -> Option<AgentAction>;
+    fn selected_action(&self) -> Option<&AgentAction>;
     fn clear_action(&mut self);
 
     fn set_available_night_events(&mut self, actions: Vec<NightEvent>);
     fn available_night_events(&self) -> &Vec<NightEvent>;
+
+    fn insert_past_selected_actions(&mut self, event: AgentAction, tick: usize);
+    fn past_selected_actions(&self) -> &HashMap<AgentAction, (usize, usize)>;
+
+    fn apply_conditions(&mut self, current_tick: usize);
+    fn add_condition(&mut self, condition: AgentCondition, until_tick: usize);
+    fn has_condition(&self, condition: AgentCondition) -> bool;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -212,7 +71,9 @@ pub struct UserAgent {
     owned_stonks: [u32; NUMBER_OF_STONKS],
     pending_action: Option<AgentAction>,
     available_night_events: Vec<NightEvent>,
-    conditions: Vec<AgentCondition>,
+    // A map of action selected in the past to (number of times it was selected, last tick it was selected).
+    past_selected_actions: HashMap<AgentAction, (usize, usize)>,
+    conditions: Vec<(usize, AgentCondition)>,
 }
 
 impl UserAgent {
@@ -223,6 +84,7 @@ impl UserAgent {
             owned_stonks: [0; NUMBER_OF_STONKS],
             pending_action: None,
             available_night_events: vec![],
+            past_selected_actions: HashMap::default(),
             conditions: vec![],
         }
     }
@@ -279,14 +141,14 @@ impl DecisionAgent for UserAgent {
     }
 
     fn select_action(&mut self, action: AgentAction) {
+        info!("Agent selected action: {:#?}", action);
         if self.pending_action.is_none() {
             self.pending_action = Some(action);
         }
-        info!("Agent selected action: {:#?}", action);
     }
 
-    fn selected_action(&self) -> Option<AgentAction> {
-        self.pending_action
+    fn selected_action(&self) -> Option<&AgentAction> {
+        self.pending_action.as_ref()
     }
 
     fn clear_action(&mut self) {
@@ -299,5 +161,42 @@ impl DecisionAgent for UserAgent {
 
     fn available_night_events(&self) -> &Vec<NightEvent> {
         &self.available_night_events
+    }
+
+    fn insert_past_selected_actions(&mut self, action: AgentAction, tick: usize) {
+        if let Some((amount, _)) = self.past_selected_actions.get(&action) {
+            self.past_selected_actions
+                .insert(action, (amount + 1, tick));
+        } else {
+            self.past_selected_actions.insert(action, (1, tick));
+        }
+    }
+
+    fn past_selected_actions(&self) -> &HashMap<AgentAction, (usize, usize)> {
+        &self.past_selected_actions
+    }
+
+    fn apply_conditions(&mut self, current_tick: usize) {
+        for (_, condition) in self.conditions.iter() {
+            match condition {
+                AgentCondition::Prison => {}
+                AgentCondition::UltraVision => {}
+            }
+        }
+
+        self.conditions
+            .retain(|(until_tick, _)| *until_tick > current_tick);
+    }
+
+    fn add_condition(&mut self, condition: AgentCondition, until_tick: usize) {
+        self.conditions.push((until_tick, condition));
+    }
+
+    fn has_condition(&self, condition: AgentCondition) -> bool {
+        self.conditions
+            .iter()
+            .map(|(_, condition)| *condition)
+            .collect::<Vec<AgentCondition>>()
+            .contains(&condition)
     }
 }
