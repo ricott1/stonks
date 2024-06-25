@@ -167,8 +167,9 @@ impl Stonk {
         .min(MAX_DRIFT)
         .max(MIN_DRIFT);
 
-        self.price_per_share_in_cents =
-            (self.price_per_share_in_cents as f64 * (1.0 + price_drift)) as u32;
+        self.price_per_share_in_cents = ((self.price_per_share_in_cents as f64
+            * (1.0 + price_drift)) as u32)
+            .max(self.starting_price / 100); // Cannot go below one hundreth of starting price
 
         self.historical_prices.push(self.price_per_share_in_cents);
 

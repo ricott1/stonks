@@ -17,6 +17,7 @@ use ratatui::widgets::{
 };
 use ratatui::{layout::Layout, Frame};
 use std::fmt::{self};
+use tracing::info;
 
 const STONKS: [&'static str; 6] = [
     "███████╗████████╗ ██████╗ ███╗   ██╗██╗  ██╗███████╗██╗",
@@ -246,7 +247,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
             _ => colors.alt_row_color,
         };
 
-        let n = stonk.historical_prices.len() % DAY_LENGTH;
+        let n = market.last_tick % DAY_LENGTH;
         let style = if n > 0 {
             let last_n_prices = stonk.historical_prices.iter().rev().take(n);
             let last_len = last_n_prices.len() as f64;
@@ -272,6 +273,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
         };
 
         let today_initial_price = stonk.historical_prices[stonk.historical_prices.len() - n - 1];
+
         let today_variation = if today_initial_price > 0 {
             (stonk.price_per_share_in_cents as f64 - today_initial_price as f64)
                 / today_initial_price as f64
@@ -534,7 +536,7 @@ fn render_night(
                 {
                     Style::default().green()
                 } else {
-                    Style::default()
+                    Style::default().black()
                 };
                 let mut lines = vec![
                     Line::from(Span::styled(

@@ -255,9 +255,7 @@ impl NightEvent {
             Self::CharacterAssassination { agent_stonks, .. } => AgentAction::CrashAgentStonks {
                 agent_stonks: *agent_stonks,
             },
-            Self::AGoodOffer => AgentAction::AddCash {
-                amount: 10000 * 100,
-            },
+            Self::AGoodOffer => AgentAction::AcceptBribe,
         }
     }
 }
