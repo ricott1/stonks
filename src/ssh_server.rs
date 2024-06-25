@@ -650,34 +650,34 @@ impl Handler for AppServer {
     }
 
     /// Called when the client closes a channel.
-    #[allow(unused_variables)]
-    async fn channel_close(
-        &mut self,
-        channel: ChannelId,
-        session: &mut Session,
-    ) -> Result<(), Self::Error> {
-        let mut clients = self.clients.lock().await;
-        clients.remove(&self.session_auth.username);
-        session.disconnect(Disconnect::ByApplication, "Game quit", "");
-        session.close(channel);
+    // #[allow(unused_variables)]
+    // async fn channel_close(
+    //     &mut self,
+    //     channel: ChannelId,
+    //     session: &mut Session,
+    // ) -> Result<(), Self::Error> {
+    //     let mut clients = self.clients.lock().await;
+    //     clients.remove(&self.session_auth.username);
+    //     session.disconnect(Disconnect::ByApplication, "Game quit", "");
+    //     session.close(channel);
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    /// Called when the client sends EOF to a channel.
-    #[allow(unused_variables)]
-    async fn channel_eof(
-        &mut self,
-        channel: ChannelId,
-        session: &mut Session,
-    ) -> Result<(), Self::Error> {
-        let mut clients = self.clients.lock().await;
-        clients.remove(&self.session_auth.username);
-        session.disconnect(Disconnect::ByApplication, "Game quit", "");
-        session.close(channel);
+    // /// Called when the client sends EOF to a channel.
+    // #[allow(unused_variables)]
+    // async fn channel_eof(
+    //     &mut self,
+    //     channel: ChannelId,
+    //     session: &mut Session,
+    // ) -> Result<(), Self::Error> {
+    //     let mut clients = self.clients.lock().await;
+    //     clients.remove(&self.session_auth.username);
+    //     session.disconnect(Disconnect::ByApplication, "Game quit", "");
+    //     session.close(channel);
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     async fn pty_request(
         &mut self,
