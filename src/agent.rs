@@ -5,11 +5,12 @@ use crate::{
     utils::AppResult,
 };
 use serde::{Deserialize, Serialize};
+use strum::Display;
 use tracing::info;
 
 const INITIAL_USER_CASH_CENTS: u32 = 10000 * 100;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum AgentAction {
     Buy {
         stonk_id: usize,
@@ -57,7 +58,7 @@ pub trait DecisionAgent {
     fn available_night_events(&self) -> &Vec<NightEvent>;
 
     fn insert_past_selected_actions(&mut self, event: AgentAction, tick: usize);
-    fn past_selected_actions(&self) -> &HashMap<AgentAction, (usize, usize)>;
+    fn past_selected_actions(&self) -> &HashMap<String, (usize, usize)>;
 
     fn apply_conditions(&mut self, current_tick: usize);
     fn add_condition(&mut self, condition: AgentCondition, until_tick: usize);
@@ -71,8 +72,9 @@ pub struct UserAgent {
     owned_stonks: [u32; NUMBER_OF_STONKS],
     pending_action: Option<AgentAction>,
     available_night_events: Vec<NightEvent>,
-    // A map of action selected in the past to (number of times it was selected, last tick it was selected).
-    past_selected_actions: HashMap<AgentAction, (usize, usize)>,
+    // A map of actions selected in the past to (number of times it was selected, last tick it was selected).
+    // We use the action string as key to be able to serialize, but lose the enum nested properties.
+    past_selected_actions: HashMap<String, (usize, usize)>,
     conditions: Vec<(usize, AgentCondition)>,
 }
 
@@ -164,15 +166,16 @@ impl DecisionAgent for UserAgent {
     }
 
     fn insert_past_selected_actions(&mut self, action: AgentAction, tick: usize) {
-        if let Some((amount, _)) = self.past_selected_actions.get(&action) {
+        if let Some((amount, _)) = self.past_selected_actions.get(&action.to_string()) {
             self.past_selected_actions
-                .insert(action, (amount + 1, tick));
+                .insert(action.to_string(), (amount + 1, tick));
         } else {
-            self.past_selected_actions.insert(action, (1, tick));
+            self.past_selected_actions
+                .insert(action.to_string(), (1, tick));
         }
     }
 
-    fn past_selected_actions(&self) -> &HashMap<AgentAction, (usize, usize)> {
+    fn past_selected_actions(&self) -> &HashMap<String, (usize, usize)> {
         &self.past_selected_actions
     }
 

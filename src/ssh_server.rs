@@ -219,6 +219,16 @@ impl Default for SessionAuth {
     }
 }
 
+impl SessionAuth {
+    pub fn new(username: String, hashed_password: u64) -> Self {
+        Self {
+            username,
+            hashed_password,
+            last_active_time: SystemTime::now(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct AppServer {
     market: Arc<Mutex<Market>>,
@@ -298,10 +308,26 @@ impl AppServer {
                 let mut agents = agents.lock().await;
                 let mut market = market.lock().await;
 
-                // let mut character_assassination_candidates = vec![];
-                // for stonk in market.stonks.iter() {
-                //     for (username, share) in stonk.shareholders.iter().take(5) {}
-                // }
+                let mut character_assassination_events = vec![];
+                for stonk in market.stonks.iter() {
+                    for (username, _) in stonk.shareholders.iter().take(5) {
+                        if let Some(agent) = agents.get(username) {
+                            if agent
+                                .past_selected_actions()
+                                .contains_key(&AgentAction::AcceptBribe.to_string())
+                            {
+                                character_assassination_events.push(
+                                    NightEvent::CharacterAssassination {
+                                        username: username.clone(),
+                                        has_taken_good_offer: true,
+                                        has_not_been_assassinated_recently: true, //FIXME: think about this
+                                        agent_stonks: agent.owned_stonks().clone(),
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
 
                 // Apply agent actions and update events.
                 // If the client did not do anything recently, it wil removed.
@@ -348,6 +374,12 @@ impl AppServer {
                                 let mut events = NightEvent::iter()
                                     .filter(|e| e.unlock_condition()(agent, &market))
                                     .collect::<Vec<NightEvent>>();
+
+                                for event in character_assassination_events.iter() {
+                                    if event.unlock_condition()(agent, &market) == true {
+                                        events.push(event.clone());
+                                    }
+                                }
 
                                 info!("Got events {:#?}", events);
                                 events.shuffle(&mut rand::thread_rng());
@@ -407,14 +439,25 @@ impl AppServer {
                     info!("There are {} agents", agents.len());
 
                     agents.retain(|_, agent| {
-                        agent
+                        let condition = agent
                             .session_auth
                             .last_active_time
                             .elapsed()
                             .expect("Time flows")
-                            <= Duration::from_secs(PERSISTED_CLIENTS_DROPOUT_TIME_SECONDS)
-                    });
+                            <= Duration::from_secs(PERSISTED_CLIENTS_DROPOUT_TIME_SECONDS);
 
+                        if !condition {
+                            for (stonk_id, &amount) in agent.owned_stonks().iter().enumerate() {
+                                let stonk = &mut market.stonks[stonk_id];
+                                if let Err(e) = stonk.deallocate_shares(agent.username(), amount) {
+                                    error!("Failed to deallocate share: {e}. Stonk id {stonk_id}, username {}, amount {amount}", agent.username());
+                                    continue;
+                                }
+                            }
+                        }
+                        condition
+                    });
+                    info!("Agents: {:#?}", agents);
                     save_agents(&agents).expect("Failed to store agents to disk");
                     save_market(&market).expect("Failed to store market to disk");
                 }
@@ -649,35 +692,35 @@ impl Handler for AppServer {
         Ok(())
     }
 
-    /// Called when the client closes a channel.
-    // #[allow(unused_variables)]
-    // async fn channel_close(
-    //     &mut self,
-    //     channel: ChannelId,
-    //     session: &mut Session,
-    // ) -> Result<(), Self::Error> {
-    //     let mut clients = self.clients.lock().await;
-    //     clients.remove(&self.session_auth.username);
-    //     session.disconnect(Disconnect::ByApplication, "Game quit", "");
-    //     session.close(channel);
+    // Called when the client closes a channel.
+    async fn channel_close(
+        &mut self,
+        channel: ChannelId,
+        session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        info!("Handling channel_close for {}", self.session_auth.username);
+        let mut clients = self.clients.lock().await;
+        clients.remove(&self.session_auth.username);
+        session.disconnect(Disconnect::ByApplication, "Game quit", "");
+        session.close(channel);
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
-    // /// Called when the client sends EOF to a channel.
-    // #[allow(unused_variables)]
-    // async fn channel_eof(
-    //     &mut self,
-    //     channel: ChannelId,
-    //     session: &mut Session,
-    // ) -> Result<(), Self::Error> {
-    //     let mut clients = self.clients.lock().await;
-    //     clients.remove(&self.session_auth.username);
-    //     session.disconnect(Disconnect::ByApplication, "Game quit", "");
-    //     session.close(channel);
+    /// Called when the client sends EOF to a channel.
+    async fn channel_eof(
+        &mut self,
+        channel: ChannelId,
+        session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        info!("Handling channel_eof for {}", self.session_auth.username);
+        let mut clients = self.clients.lock().await;
+        clients.remove(&self.session_auth.username);
+        session.disconnect(Disconnect::ByApplication, "Game quit", "");
+        session.close(channel);
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
     async fn pty_request(
         &mut self,

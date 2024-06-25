@@ -169,28 +169,28 @@ impl NightEvent {
                 username,
                 has_taken_good_offer,
                 has_not_been_assassinated_recently,
-                agent_stonks,
+                ..
             } => {
                 let username = username.clone();
                 let has_taken_good_offer = has_taken_good_offer.clone();
-                let agent_stonks = agent_stonks.clone();
+                // let agent_stonks = agent_stonks.clone();
                 let has_not_been_assassinated_recently = has_not_been_assassinated_recently.clone();
-                Box::new(move |agent, market| {
-                    let has_any_large_stake = agent_stonks
-                        .iter()
-                        .enumerate()
-                        .map(|(stonk_id, &amount)| 100.0 * market.stonks[stonk_id].to_stake(amount))
-                        .any(|s| s > 5.0);
+                Box::new(move |agent, _| {
+                    // let has_any_large_stake = agent_stonks
+                    //     .iter()
+                    //     .enumerate()
+                    //     .map(|(stonk_id, &amount)| 100.0 * market.stonks[stonk_id].to_stake(amount))
+                    //     .any(|s| s > 5.0);
                     username != agent.username()
                         && has_taken_good_offer
                         && has_not_been_assassinated_recently
-                        && has_any_large_stake
+                    // && has_any_large_stake
                 })
             }
             Self::AGoodOffer => Box::new(|agent, _| {
                 agent
                     .past_selected_actions()
-                    .get(&AgentAction::AcceptBribe)
+                    .get(&AgentAction::AcceptBribe.to_string())
                     .is_none()
                     && agent.cash() < 1000 * 100
             }),

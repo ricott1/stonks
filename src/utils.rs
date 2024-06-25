@@ -284,3 +284,51 @@ pub fn convert_data_to_crossterm_event(data: &[u8]) -> Option<Event> {
 
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{save_agents, AppResult};
+    use crate::{
+        agent::{DecisionAgent, UserAgent},
+        ssh_server::SessionAuth,
+    };
+    use directories;
+    use std::{collections::HashMap, fs::File};
+
+    #[test]
+    fn test_path() {
+        let dirs = directories::ProjectDirs::from("org", "frittura", "test");
+        assert!(dirs.is_some());
+        let dirs_ok = dirs.unwrap();
+        let config_dirs = dirs_ok.config_dir();
+        println!("{:?}", config_dirs);
+        if !config_dirs.exists() {
+            std::fs::create_dir_all(config_dirs).unwrap();
+        }
+        let path = config_dirs.join("test");
+        let file = File::create(path.clone());
+        assert!(file.is_ok());
+        assert!(path.is_file());
+        if config_dirs.exists() {
+            std::fs::remove_dir_all(config_dirs).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_save() -> AppResult<()> {
+        let _agents = vec![
+            UserAgent::new(SessionAuth::new("username".into(), 25)),
+            UserAgent::new(SessionAuth::default()),
+        ];
+
+        let mut agents = HashMap::new();
+
+        for agent in _agents.iter() {
+            agents.insert(agent.username().to_string(), agent.clone());
+        }
+
+        save_agents(&agents)?;
+
+        Ok(())
+    }
+}
