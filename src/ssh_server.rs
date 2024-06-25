@@ -434,7 +434,6 @@ impl AppServer {
         let key_pair = russh_keys::key::KeyPair::Ed25519(signing_key);
 
         let config = Config {
-            inactivity_timeout: Some(std::time::Duration::from_secs(10)),
             auth_rejection_time: std::time::Duration::from_secs(2),
             auth_rejection_time_initial: Some(std::time::Duration::from_secs(0)),
             keys: vec![key_pair],
@@ -452,6 +451,10 @@ impl Server for AppServer {
     type Handler = Self;
     fn new_client(&mut self, _: Option<std::net::SocketAddr>) -> Self {
         self.clone()
+    }
+
+    fn handle_session_error(&mut self, error: <Self::Handler as Handler>::Error) {
+        error!("Session error: {}", error);
     }
 }
 
