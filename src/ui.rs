@@ -233,6 +233,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
         "Stake",
         "Value",
         "Top Shareholders",
+        "Market cap",
     ]
     .into_iter()
     .map(Cell::from)
@@ -371,6 +372,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
             Cell::new(format!("\n{:.2}%", agent_share * 100.0)).style(agent_style),
             Cell::new(format!("\n${}", agent_stonk_value)).style(agent_stonk_style),
             Cell::new(top_shareholders),
+            Cell::new(format!("\n${:.2}", stonk.formatted_market_cap())).style(style),
         ])
         .style(Style::new().fg(colors.row_fg).bg(color))
         .height(3)
@@ -387,6 +389,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
             Constraint::Length(10),
             Constraint::Length(10),
             Constraint::Length(20),
+            Constraint::Length(10),
         ],
     )
     .header(header)
@@ -600,7 +603,7 @@ fn render_stonk(
         Style::default().yellow(),
         Style::default().blue(),
         Style::default().white(),
-        Style::default().light_magenta(),
+        Style::default().light_green(),
     ];
 
     let graph_width = area.width as usize - 5;

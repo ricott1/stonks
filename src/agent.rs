@@ -12,26 +12,15 @@ const INITIAL_USER_CASH_CENTS: u32 = 10000 * 100;
 
 #[derive(Debug, Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum AgentAction {
-    Buy {
-        stonk_id: usize,
-        amount: u32,
-    },
-    Sell {
-        stonk_id: usize,
-        amount: u32,
-    },
-    BumpStonkClass {
-        class: StonkClass,
-    },
+    Buy { stonk_id: usize, amount: u32 },
+    Sell { stonk_id: usize, amount: u32 },
+    BumpStonkClass { class: StonkClass },
     CrashAll,
     OneDayUltraVision,
-    CrashAgentStonks {
-        agent_stonks: [u32; NUMBER_OF_STONKS],
-    },
-    AddCash {
-        amount: u32,
-    },
+    CrashAgentStonks { username: String },
+    AddCash { amount: u32 },
     AcceptBribe,
+    AssassinationVictim, // This action is actually used to signal that the user got CharacterAssassinated
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -57,7 +46,7 @@ pub trait DecisionAgent {
     fn set_available_night_events(&mut self, actions: Vec<NightEvent>);
     fn available_night_events(&self) -> &Vec<NightEvent>;
 
-    fn insert_past_selected_actions(&mut self, event: AgentAction, tick: usize);
+    fn insert_past_selected_actions(&mut self, action: AgentAction, tick: usize);
     fn past_selected_actions(&self) -> &HashMap<String, (usize, usize)>;
 
     fn apply_conditions(&mut self, current_tick: usize);

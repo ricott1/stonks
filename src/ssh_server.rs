@@ -320,14 +320,14 @@ impl AppServer {
                             if agent
                                 .past_selected_actions()
                                 .contains_key(&AgentAction::AcceptBribe.to_string())
+                                && !agent
+                                    .past_selected_actions()
+                                    .contains_key(&AgentAction::AssassinationVictim.to_string())
                             {
                                 usernames.push(username);
                                 character_assassination_events.push(
                                     NightEvent::CharacterAssassination {
                                         username: username.clone(),
-                                        has_taken_good_offer: true,
-                                        has_not_been_assassinated_recently: true, //FIXME: think about this
-                                        agent_stonks: agent.owned_stonks().clone(),
                                     },
                                 )
                             }
@@ -335,11 +335,10 @@ impl AppServer {
                     }
                 }
 
-                // Apply agent actions and update events.
                 // If the client did not do anything recently, it wil removed.
                 let mut _to_remove = vec![];
-                for (id, client) in clients.iter_mut() {
-                    let try_agent = agents.get_mut(&client.username);
+                for (id, client) in clients.iter() {
+                    let try_agent = agents.get(&client.username);
 
                     if try_agent.is_none() {
                         _to_remove.push(id.clone());
@@ -357,6 +356,22 @@ impl AppServer {
                         _to_remove.push(id.clone());
                         continue;
                     }
+                }
+
+                clients.retain(|_, c| !_to_remove.contains(&c.username));
+
+                // If the client did not do anything recently, it wil removed.
+                let mut _to_remove = vec![];
+                for (id, client) in clients.iter_mut() {
+                    let try_agent = agents.get(&client.username);
+
+                    if try_agent.is_none() {
+                        _to_remove.push(id.clone());
+                        continue;
+                    }
+                    let agent = &mut try_agent
+                        .expect("Client agent should exist in persisted agents.")
+                        .clone();
 
                     match market.phase {
                         GamePhase::Day { .. } => {
@@ -365,7 +380,7 @@ impl AppServer {
                             agent.set_available_night_events(vec![]);
                             if let Some(_) = agent.selected_action() {
                                 market
-                                    .apply_agent_action::<UserAgent>(agent)
+                                    .apply_agent_action::<UserAgent>(agent, &mut agents)
                                     .unwrap_or_else(|e| {
                                         error!("Could not apply agent {} action: {}", id, e)
                                     });
@@ -405,8 +420,9 @@ impl AppServer {
                             }
                         }
                     }
+
+                    agents.insert(agent.username().to_string(), agent.clone());
                 }
-                clients.retain(|_, c| !_to_remove.contains(&c.username));
 
                 // Update market if necessary
                 if last_market_tick.elapsed().expect("Time flows backwards")

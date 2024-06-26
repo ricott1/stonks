@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{
     agent::{AgentAction, AgentCondition, DecisionAgent},
     stonk::{Stonk, StonkCondition},
@@ -79,7 +81,7 @@ impl GamePhase {
     pub fn formatted(&self) -> String {
         let time = self.time();
         format!(
-            "{:3} {:6} {:3   } {:02}:{:02}",
+            "{:3} {:6} {:4} {:02}:{:02}",
             self.day(),
             self.season(),
             self.year(),
@@ -175,7 +177,11 @@ impl Market {
         }
     }
 
-    pub fn apply_agent_action<A: DecisionAgent>(&mut self, agent: &mut A) -> AppResult<()> {
+    pub fn apply_agent_action<A: DecisionAgent>(
+        &mut self,
+        agent: &mut A,
+        agents: &mut HashMap<String, A>,
+    ) -> AppResult<()> {
         if let Some(action) = agent.selected_action().cloned().as_ref() {
             agent.clear_action();
             info!("Applying action {:?}", action);
@@ -249,23 +255,31 @@ impl Market {
                 AgentAction::OneDayUltraVision => {
                     agent.add_condition(AgentCondition::UltraVision, self.last_tick + DAY_LENGTH)
                 }
-                AgentAction::CrashAgentStonks { agent_stonks } => {
-                    for (stonk_id, &amount) in agent_stonks.iter().enumerate() {
-                        let stonk = &mut self.stonks[stonk_id];
-                        let stake = stonk.to_stake(amount);
-                        stonk.add_condition(
-                            StonkCondition::Bump { amount: stake },
-                            self.last_tick + DAY_LENGTH,
+                AgentAction::CrashAgentStonks { username } => {
+                    if let Some(target) = agents.get_mut(username) {
+                        target.insert_past_selected_actions(
+                            AgentAction::AssassinationVictim,
+                            self.last_tick,
                         );
-                        stonk.add_condition(
-                            StonkCondition::SetShockProbability {
-                                value: (stonk.shock_probability * 4.0).min(1.0),
-                                previous_shock_probability: stonk.shock_probability,
-                            },
-                            self.last_tick + DAY_LENGTH,
-                        );
+
+                        for (stonk_id, &amount) in target.owned_stonks().iter().enumerate() {
+                            let stonk = &mut self.stonks[stonk_id];
+                            let stake = stonk.to_stake(amount);
+                            stonk.add_condition(
+                                StonkCondition::Bump { amount: stake },
+                                self.last_tick + DAY_LENGTH,
+                            );
+                            stonk.add_condition(
+                                StonkCondition::SetShockProbability {
+                                    value: (stonk.shock_probability * 4.0).min(1.0),
+                                    previous_shock_probability: stonk.shock_probability,
+                                },
+                                self.last_tick + DAY_LENGTH,
+                            );
+                        }
                     }
                 }
+                AgentAction::AssassinationVictim => {}
             }
             agent.insert_past_selected_actions(action.clone(), self.last_tick);
         }

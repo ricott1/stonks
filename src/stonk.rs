@@ -245,4 +245,8 @@ impl Stonk {
     pub fn formatted_sell_price(&self) -> f64 {
         self.sell_price() as f64 / 100.0
     }
+
+    pub fn formatted_market_cap(&self) -> f64 {
+        self.market_cap() as f64 / 100.0
+    }
 }

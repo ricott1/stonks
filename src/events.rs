@@ -18,12 +18,7 @@ pub enum NightEvent {
     PurpleBlockchain,
     MarketCrash,
     UltraVision,
-    CharacterAssassination {
-        username: String,
-        has_taken_good_offer: bool,
-        has_not_been_assassinated_recently: bool,
-        agent_stonks: [u32; NUMBER_OF_STONKS],
-    },
+    CharacterAssassination { username: String },
     AGoodOffer,
 }
 
@@ -168,16 +163,8 @@ impl NightEvent {
                 let riccardino = &market.stonks[riccardino_id];
                 100.0 * riccardino.to_stake(agent.owned_stonks()[riccardino_id]) >= 10.0
             }),
-            Self::CharacterAssassination {
-                username,
-                has_taken_good_offer,
-                has_not_been_assassinated_recently,
-                ..
-            } => {
+            Self::CharacterAssassination { username, .. } => {
                 let username = username.clone();
-                let has_taken_good_offer = has_taken_good_offer.clone();
-                // let agent_stonks = agent_stonks.clone();
-                let has_not_been_assassinated_recently = has_not_been_assassinated_recently.clone();
                 Box::new(move |agent, _| {
                     // let has_any_large_stake = agent_stonks
                     //     .iter()
@@ -185,8 +172,6 @@ impl NightEvent {
                     //     .map(|(stonk_id, &amount)| 100.0 * market.stonks[stonk_id].to_stake(amount))
                     //     .any(|s| s > 5.0);
                     username != agent.username()
-                        && has_taken_good_offer
-                        && has_not_been_assassinated_recently
                     // && has_any_large_stake
                 })
             }
@@ -252,8 +237,8 @@ impl NightEvent {
             },
             Self::MarketCrash => AgentAction::CrashAll,
             Self::UltraVision => AgentAction::OneDayUltraVision,
-            Self::CharacterAssassination { agent_stonks, .. } => AgentAction::CrashAgentStonks {
-                agent_stonks: *agent_stonks,
+            Self::CharacterAssassination { username, .. } => AgentAction::CrashAgentStonks {
+                username: username.to_string(),
             },
             Self::AGoodOffer => AgentAction::AcceptBribe,
         }
