@@ -54,6 +54,13 @@ impl GamePhase {
         }
     }
 
+    fn day(&self) -> usize {
+        match self {
+            Self::Day { cycle, .. } => cycle % 365 + 1,
+            Self::Night { cycle, .. } => cycle % 365 + 1,
+        }
+    }
+
     fn season(&self) -> Season {
         let seasons = Season::iter().collect::<Vec<Season>>();
         match self {
@@ -63,7 +70,7 @@ impl GamePhase {
     }
 
     fn year(&self) -> usize {
-        match self {
+        2024 + match self {
             Self::Day { cycle, .. } => cycle / 90 / 4 + 1,
             Self::Night { cycle, .. } => cycle / 90 / 4 + 1,
         }
@@ -72,7 +79,8 @@ impl GamePhase {
     pub fn formatted(&self) -> String {
         let time = self.time();
         format!(
-            "{:6} {} {:02}:{:02}",
+            "{:3} {:6} {:3   } {:02}:{:02}",
+            self.day(),
             self.season(),
             self.year(),
             time.0,

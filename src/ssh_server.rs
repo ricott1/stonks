@@ -309,13 +309,19 @@ impl AppServer {
                 let mut market = market.lock().await;
 
                 let mut character_assassination_events = vec![];
+                let mut usernames = vec![];
                 for stonk in market.stonks.iter() {
                     for (username, _) in stonk.shareholders.iter().take(5) {
+                        if usernames.contains(&username) {
+                            continue;
+                        }
+
                         if let Some(agent) = agents.get(username) {
                             if agent
                                 .past_selected_actions()
                                 .contains_key(&AgentAction::AcceptBribe.to_string())
                             {
+                                usernames.push(username);
                                 character_assassination_events.push(
                                     NightEvent::CharacterAssassination {
                                         username: username.clone(),

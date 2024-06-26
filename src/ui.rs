@@ -17,7 +17,6 @@ use ratatui::widgets::{
 };
 use ratatui::{layout::Layout, Frame};
 use std::fmt::{self};
-use tracing::info;
 
 const STONKS: [&'static str; 6] = [
     "███████╗████████╗ ██████╗ ███╗   ██╗██╗  ██╗███████╗██╗",
@@ -774,7 +773,7 @@ fn render_header(
         }
     };
     let header_text = format!(
-        "{:12} - Cash: ${:<6.2} - {}",
+        "{} - Cash: ${:<6.2} - {}",
         market.phase.formatted(),
         agent.formatted_cash(),
         extra_text,
