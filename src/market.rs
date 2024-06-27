@@ -206,7 +206,7 @@ impl Market {
                     agent.add_stonk(*stonk_id, *amount)?;
                     stonk.allocate_shares(agent.username(), *amount)?;
 
-                    let bump_amount = stonk.to_stake(agent.owned_stonks()[stonk.id]);
+                    let bump_amount = stonk.to_stake(*amount) * 100.0;
                     stonk.add_condition(
                         StonkCondition::Bump {
                             amount: bump_amount,
@@ -221,7 +221,7 @@ impl Market {
                     agent.add_cash(cost)?;
                     stonk.deallocate_shares(agent.username(), *amount)?;
 
-                    let bump_amount = stonk.to_stake(agent.owned_stonks()[stonk.id]);
+                    let bump_amount = stonk.to_stake(*amount) * 100.0;
                     stonk.add_condition(
                         StonkCondition::Bump {
                             amount: -bump_amount,
@@ -232,7 +232,7 @@ impl Market {
                 AgentAction::BumpStonkClass { class } => {
                     for stonk in self.stonks.iter_mut().filter(|s| s.class == *class) {
                         stonk.add_condition(
-                            StonkCondition::Bump { amount: 10.0 },
+                            StonkCondition::Bump { amount: 4.0 },
                             self.last_tick + DAY_LENGTH,
                         )
                     }
@@ -240,7 +240,7 @@ impl Market {
                 AgentAction::CrashAll => {
                     for stonk in self.stonks.iter_mut() {
                         stonk.add_condition(
-                            StonkCondition::Bump { amount: -10.0 },
+                            StonkCondition::Bump { amount: -4.0 },
                             self.last_tick + DAY_LENGTH,
                         );
                         stonk.add_condition(

@@ -17,7 +17,6 @@ use ratatui::widgets::{
 };
 use ratatui::{layout::Layout, Frame};
 use std::fmt::{self};
-use tracing::info;
 
 const STONKS: [&'static str; 6] = [
     "███████╗████████╗ ██████╗ ███╗   ██╗██╗  ██╗███████╗██╗",
@@ -379,7 +378,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
         Cell::new(format!("\n{:.2}%", avg_agent_share)).style(avg_agent_share.ustyle()),
         Cell::new(format!("\n${:.0}", total_agent_stonk_value))
             .style(total_agent_stonk_value.style()),
-        Cell::new("total_top_shareholders"),
+        Cell::new(""),
         Cell::new(total_market_cap_text).style(total_max_variation_style),
     ])
     .style(Style::new().fg(colors.header_fg).bg(colors.header_bg))

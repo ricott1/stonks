@@ -82,9 +82,9 @@ impl AppServer {
             save_market(&m)?;
             m
         } else {
-            let mut m = load_market().unwrap_or_default();
-            for stonk in m.stonks.iter_mut() {
-                stonk.allocated_shares = stonk.shareholders.iter().map(|(_, amount)| *amount).sum();
+            let m = load_market().unwrap_or_default();
+            info!("Loading market. Starting back from {:#?}", m.phase);
+            for stonk in m.stonks.iter() {
                 info!(
                     "Stonk availability: {} out of {} ({} bought)",
                     stonk.available_amount(),
@@ -93,7 +93,6 @@ impl AppServer {
                 );
             }
 
-            info!("Loading market. Starting back from {:#?}", m.phase);
             m
         };
 
