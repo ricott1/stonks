@@ -9,6 +9,7 @@ use std::fmt::Display;
 use strum_macros::EnumIter;
 
 const A_GOOD_OFFER_PROBABILITY: f64 = 0.4;
+const LUCKY_NIGHT_PROBABILITY: f64 = 0.25;
 
 #[derive(Debug, Clone, EnumIter, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum NightEvent {
@@ -20,6 +21,7 @@ pub enum NightEvent {
     UltraVision,
     CharacterAssassination { username: String },
     AGoodOffer,
+    LuckyNight,
 }
 
 impl Display for NightEvent {
@@ -30,9 +32,10 @@ impl Display for NightEvent {
             Self::RoyalScandal => write!(f, "Royal scandal"),
             Self::PurpleBlockchain => write!(f, "Purple blockchain"),
             Self::MarketCrash => write!(f, "Market crash"),
-            Self::UltraVision => write!(f, "UltraVision"),
+            Self::UltraVision => write!(f, "Ultra vision"),
             Self::CharacterAssassination { .. } => write!(f, "Character assassination"),
             Self::AGoodOffer => write!(f, "A good offer"),
+            Self::LuckyNight => write!(f, "Lucky night"),
         }
     }
 }
@@ -87,6 +90,11 @@ impl NightEvent {
                 "An offer you can't refuse".to_string(),
                 "they say. Get $10000,".to_string(),
                 "pay later (maybe).".to_string(),
+            ],
+            Self::LuckyNight => vec![
+                "You've found a $100 ".to_string(),
+                "on the ground.".to_string(),
+                "Che culo!".to_string(),
             ],
         };
 
@@ -180,11 +188,17 @@ impl NightEvent {
                     .past_selected_actions()
                     .get(&AgentAction::AcceptBribe.to_string())
                     .is_none()
-                    && agent.cash() < 1000 * 100
+                    && agent.cash() < 1_000 * 100
                     && {
                         let rng = &mut rand::thread_rng();
                         rng.gen_bool(A_GOOD_OFFER_PROBABILITY)
                     }
+            }),
+            Self::LuckyNight => Box::new(|agent, _| {
+                agent.cash() < 2_000 * 100 && {
+                    let rng = &mut rand::thread_rng();
+                    rng.gen_bool(LUCKY_NIGHT_PROBABILITY)
+                }
             }),
         }
     }
@@ -218,6 +232,7 @@ impl NightEvent {
                 "Random chance,".to_string(),
                 "happens only once".to_string(),
             ],
+            Self::LuckyNight => vec!["Random chance".to_string()],
         }
     }
 
@@ -241,6 +256,7 @@ impl NightEvent {
                 username: username.to_string(),
             },
             Self::AGoodOffer => AgentAction::AcceptBribe,
+            Self::LuckyNight => AgentAction::AddCash { amount: 100 * 100 },
         }
     }
 }
