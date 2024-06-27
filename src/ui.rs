@@ -117,6 +117,42 @@ impl ZoomLevel {
     }
 }
 
+trait Styled {
+    fn style(&self) -> Style;
+    fn ustyle(&self) -> Style;
+}
+impl Styled for f64 {
+    fn style(&self) -> Style {
+        if *self >= 1.0 {
+            Style::default().green()
+        } else if *self >= 0.1 {
+            Style::default().light_green()
+        } else if *self <= -1.0 {
+            Style::default().red()
+        } else if *self <= -0.1 {
+            Style::default().yellow()
+        } else {
+            Style::default()
+        }
+    }
+
+    fn ustyle(&self) -> Style {
+        if *self > 50.0 {
+            Style::default().magenta()
+        } else if *self >= 10.0 {
+            Style::default().cyan()
+        } else if *self >= 5.0 {
+            Style::default().light_cyan()
+        } else if *self >= 1.0 {
+            Style::default().green()
+        } else if *self >= 0.1 {
+            Style::default().light_green()
+        } else {
+            Style::default()
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct UiOptions {
     pub focus_on_stonk: Option<usize>,
@@ -915,7 +951,6 @@ pub fn render(
     let split = Layout::vertical([
         Constraint::Length(1), //header
         Constraint::Min(0),    //body
-        Constraint::Length(3), // stonk info / newspaper
         Constraint::Length(3), //footer
     ])
     .split(area);
@@ -933,8 +968,13 @@ pub fn render(
         UiDisplay::Portfolio => {}
         UiDisplay::Stonks => match market.phase {
             GamePhase::Day { .. } => {
-                render_day(frame, market, agent, ui_options, split[1])?;
-                render_stonk_info(frame, market, agent, ui_options, split[2]);
+                let sub_split = Layout::vertical([
+                    Constraint::Min(0),    //body
+                    Constraint::Length(3), // stonk info / newspaper
+                ])
+                .split(split[1]);
+                render_day(frame, market, agent, ui_options, sub_split[0])?;
+                render_stonk_info(frame, market, agent, ui_options, sub_split[1]);
             }
             GamePhase::Night { counter, .. } => {
                 render_night(frame, counter, agent, ui_options, split[1])?
@@ -942,43 +982,7 @@ pub fn render(
         },
     }
 
-    render_footer(frame, market, agent, ui_options, split[3]);
+    render_footer(frame, market, agent, ui_options, split[2]);
 
     Ok(())
-}
-
-trait Styled {
-    fn style(&self) -> Style;
-    fn ustyle(&self) -> Style;
-}
-impl Styled for f64 {
-    fn style(&self) -> Style {
-        if *self >= 1.0 {
-            Style::default().green()
-        } else if *self >= 0.1 {
-            Style::default().light_green()
-        } else if *self <= -1.0 {
-            Style::default().red()
-        } else if *self <= -0.1 {
-            Style::default().yellow()
-        } else {
-            Style::default()
-        }
-    }
-
-    fn ustyle(&self) -> Style {
-        if *self > 50.0 {
-            Style::default().magenta()
-        } else if *self >= 10.0 {
-            Style::default().cyan()
-        } else if *self >= 5.0 {
-            Style::default().light_cyan()
-        } else if *self >= 1.0 {
-            Style::default().green()
-        } else if *self >= 0.1 {
-            Style::default().light_green()
-        } else {
-            Style::default()
-        }
-    }
 }

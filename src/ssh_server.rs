@@ -11,15 +11,14 @@ use rand_chacha::ChaCha8Rng;
 use rand_distr::Alphanumeric;
 use russh::{server::*, Channel, ChannelId, Disconnect, Pty};
 use russh_keys::key::PublicKey;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use strum::IntoEnumIterator;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info};
 
-pub type Password = u64;
 pub type AgentsDatabase = HashMap<String, UserAgent>;
 
 const CLIENTS_DROPOUT_TIME_SECONDS: u64 = 60 * 10;
@@ -42,10 +41,6 @@ pub struct AppServer {
 }
 
 impl AppServer {
-    fn check_agent_password(agent: &UserAgent, password: u64) -> bool {
-        agent.session_auth.hashed_password == password
-    }
-
     fn generate_user_id() -> String {
         let buf_id = rand::thread_rng()
             .sample_iter(&Alphanumeric)
@@ -353,7 +348,11 @@ impl Handler for AppServer {
 
         // If session_auth.username is in the persisted agents db, we check the password
         let mut agent = if let Some(db_agent) = agents.get_mut(&self.session_auth.username) {
-            if Self::check_agent_password(db_agent, self.session_auth.hashed_password) == false {
+            if db_agent
+                .session_auth
+                .check_password(self.session_auth.hashed_password)
+                == false
+            {
                 let error_string = format!("\n\rWrong password.\n");
                 session.disconnect(Disconnect::ByApplication, error_string.as_str(), "");
                 session.close(channel.id());
@@ -415,10 +414,10 @@ impl Handler for AppServer {
             user.to_string()
         };
 
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = Sha256::new();
         let salted_password = format!("{}{}", password, AUTH_PASSWORD_SALT);
-        salted_password.hash(&mut hasher);
-        let hashed_password = hasher.finish();
+        hasher.update(salted_password);
+        let hashed_password = hasher.finalize().to_vec()[..].try_into()?;
 
         // We defer checking username and password to channel_open_session so that it is possible
         // to send informative error messages to the user using session.write.
@@ -446,10 +445,10 @@ impl Handler for AppServer {
             user.to_string()
         };
 
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = Sha256::new();
         let salted_password = format!("{}{}", public_key.fingerprint(), AUTH_PUBLIC_KEY_SALT);
-        salted_password.hash(&mut hasher);
-        let hashed_password = hasher.finish();
+        hasher.update(salted_password);
+        let hashed_password = hasher.finalize().to_vec()[..].try_into()?;
 
         // We defer checking username and password to channel_open_session so that it is possible
         // to send informative error messages to the user using session.write.

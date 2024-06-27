@@ -317,7 +317,7 @@ mod tests {
     #[test]
     fn test_save() -> AppResult<()> {
         let _agents = vec![
-            UserAgent::new(SessionAuth::new("username".into(), 25)),
+            UserAgent::new(SessionAuth::new("username".into(), [0; 32])),
             UserAgent::new(SessionAuth::default()),
         ];
 

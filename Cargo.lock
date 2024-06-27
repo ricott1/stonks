@@ -2230,6 +2230,7 @@ dependencies = [
  "russh-keys",
  "serde",
  "serde_json",
+ "sha2",
  "strum",
  "strum_macros",
  "tokio",

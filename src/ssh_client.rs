@@ -222,10 +222,12 @@ impl Client {
     }
 }
 
+pub type Password = [u8; 32];
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SessionAuth {
     pub username: String,
-    pub hashed_password: u64,
+    pub hashed_password: Password,
     pub last_active_time: SystemTime,
 }
 
@@ -233,14 +235,14 @@ impl Default for SessionAuth {
     fn default() -> Self {
         Self {
             username: "".to_string(),
-            hashed_password: 0,
+            hashed_password: [0; 32],
             last_active_time: SystemTime::now(),
         }
     }
 }
 
 impl SessionAuth {
-    pub fn new(username: String, hashed_password: u64) -> Self {
+    pub fn new(username: String, hashed_password: Password) -> Self {
         Self {
             username,
             hashed_password,
@@ -250,5 +252,9 @@ impl SessionAuth {
 
     pub fn update_last_active_time(&mut self) {
         self.last_active_time = SystemTime::now();
+    }
+
+    pub fn check_password(&self, password: Password) -> bool {
+        self.hashed_password == password
     }
 }

@@ -24,6 +24,7 @@ russh = "0.43.0"
 russh-keys = "0.43.0"
 serde = "1.0.203"
 serde_json = "1.0.117"
+sha2 = "0.10.8"
 strum = "0.26.2"
 strum_macros = "0.26.4"
 tokio = { version = "1.38.0", features = ["full"] }

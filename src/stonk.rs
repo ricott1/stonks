@@ -75,8 +75,8 @@ impl Stonk {
         }
     }
 
-    pub fn market_cap(&self) -> u32 {
-        self.price_per_share_in_cents as u32 * self.number_of_shares as u32
+    pub fn market_cap(&self) -> u64 {
+        self.price_per_share_in_cents as u64 * self.number_of_shares as u64
     }
 
     pub fn available_amount(&self) -> u32 {
