@@ -339,7 +339,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
                 .map(|(holder, amount)| {
                     let agent_share = stonk.to_stake(*amount) * 100.0;
                     let agent_style = agent_share.ustyle();
-                    Line::from(format!("{} {:.2}%", holder, agent_share)).style(agent_style)
+                    Line::from(format!("{} {:.3}%", holder, agent_share)).style(agent_style)
                 })
                 .collect::<Vec<Line>>();
 
