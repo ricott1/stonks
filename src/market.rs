@@ -206,6 +206,13 @@ impl Market {
                     agent.add_stonk(*stonk_id, *amount)?;
                     stonk.allocate_shares(agent.username(), *amount)?;
 
+                    info!(
+                        "{} stonks bought, there are now {} available ({} total bought)",
+                        amount,
+                        stonk.available_amount(),
+                        stonk.allocated_shares
+                    );
+
                     let bump_amount = stonk.to_stake(*amount) * 100.0;
                     stonk.add_condition(
                         StonkCondition::Bump {

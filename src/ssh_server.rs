@@ -27,8 +27,8 @@ const PERSISTED_CLIENTS_DROPOUT_TIME_SECONDS: u64 = 60 * 60 * 24;
 const STORE_TO_DISK_INTERVAL_SECONDS: u64 = 60;
 const MARKET_TICK_INTERVAL_MILLIS: u64 = 1000;
 const RENDER_INTERVAL_MILLIS: u64 = 50;
-const MIN_USER_LENGTH: usize = 3;
-const MAX_USER_LENGTH: usize = 16;
+const MIN_USERNAME_LENGTH: usize = 3;
+const MAX_USERNAME_LENGTH: usize = 16;
 
 static AUTH_PASSWORD_SALT: &'static str = "gbasfhgE4Fvb";
 static AUTH_PUBLIC_KEY_SALT: &'static str = "fa2RR4fq9XX9";
@@ -364,12 +364,12 @@ impl Handler for AppServer {
         }
         // Else, we check the username and persist it
         else {
-            if self.session_auth.username.len() < MIN_USER_LENGTH
-                || self.session_auth.username.len() > MAX_USER_LENGTH
+            if self.session_auth.username.len() < MIN_USERNAME_LENGTH
+                || self.session_auth.username.len() > MAX_USERNAME_LENGTH
             {
                 let error_string = format!(
                     "\n\rInvalid username. The username must have between {} and {} characters.\n",
-                    MIN_USER_LENGTH, MAX_USER_LENGTH
+                    MIN_USERNAME_LENGTH, MAX_USERNAME_LENGTH
                 );
                 session.disconnect(Disconnect::ByApplication, error_string.as_str(), "");
                 session.close(channel.id());
