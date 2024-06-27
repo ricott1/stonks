@@ -58,6 +58,15 @@ impl AppServer {
     }
 
     pub fn new(reset: bool, seed: Option<u64>) -> AppResult<Self> {
+        let agents = if reset {
+            let agents = AgentsDatabase::default();
+            save_agents(&agents)?;
+            agents
+        } else {
+            load_agents().unwrap_or_default()
+        };
+        info!("Loaded {} agents from store", agents.len());
+
         let market = if reset {
             info!("Creating new market from scratch");
             let mut m = Market::default();
@@ -73,19 +82,22 @@ impl AppServer {
             save_market(&m)?;
             m
         } else {
-            let m = load_market().unwrap_or_default();
+            let mut m = load_market().unwrap_or_default();
+            for stonk in m.stonks.iter_mut() {
+                stonk.allocated_shares = stonk.shareholders.iter().map(|(_, amount)| *amount).sum();
+            }
+
+            for stonk in m.stonks.iter() {
+                info!(
+                    "Stonk availability: {} out of {} ({} bought)",
+                    stonk.available_amount(),
+                    stonk.number_of_shares,
+                    stonk.allocated_shares
+                );
+            }
             info!("Loading market. Starting back from {:#?}", m.phase);
             m
         };
-
-        let agents = if reset {
-            let agents = AgentsDatabase::default();
-            save_agents(&agents)?;
-            agents
-        } else {
-            load_agents().unwrap_or_default()
-        };
-        info!("Loaded {} agents from store", agents.len());
 
         Ok(Self {
             market: Arc::new(Mutex::new(market)),
