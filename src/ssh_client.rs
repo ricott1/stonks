@@ -116,8 +116,9 @@ impl Client {
         self.ui_options.render_counter += 1;
     }
 
-    pub fn clear_render_counter(&mut self) {
+    pub fn clear_ui_options(&mut self) {
         self.ui_options.render_counter = 0;
+        self.ui_options.selected_event_card_index = 0;
     }
 
     pub fn handle_key_events(

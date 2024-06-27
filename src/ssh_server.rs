@@ -116,31 +116,12 @@ impl AppServer {
                 let mut agents = agents.lock().await;
                 let mut market = market.lock().await;
 
-                let mut character_assassination_events = vec![];
-                let mut usernames = vec![];
-                for stonk in market.stonks.iter() {
-                    for (username, _) in stonk.shareholders.iter().take(5) {
-                        if usernames.contains(&username) {
-                            continue;
-                        }
-
-                        if let Some(agent) = agents.get(username) {
-                            if agent
-                                .past_selected_actions()
-                                .contains_key(&AgentAction::AcceptBribe.to_string())
-                                && !agent
-                                    .past_selected_actions()
-                                    .contains_key(&AgentAction::AssassinationVictim.to_string())
-                            {
-                                usernames.push(username);
-                                character_assassination_events.push(
-                                    NightEvent::CharacterAssassination {
-                                        username: username.clone(),
-                                    },
-                                )
-                            }
-                        }
-                    }
+                // Update market if necessary
+                if last_market_tick.elapsed().expect("Time flows backwards")
+                    > Duration::from_millis(MARKET_TICK_INTERVAL_MILLIS)
+                {
+                    market.tick();
+                    last_market_tick = SystemTime::now();
                 }
 
                 // If the client did not do anything recently, it wil removed.
@@ -168,15 +149,38 @@ impl AppServer {
 
                 clients.retain(|_, c| !_to_remove.contains(&c.username().to_string()));
 
-                // If the client did not do anything recently, it wil removed.
-                let mut _to_remove = vec![];
+                // Prepare CharacterAssassination events common to every agent
+                let mut character_assassination_events = vec![];
+                let mut usernames = vec![];
+                for stonk in market.stonks.iter() {
+                    for (username, _) in stonk.shareholders.iter().take(5) {
+                        if usernames.contains(&username) {
+                            continue;
+                        }
+
+                        if let Some(agent) = agents.get(username) {
+                            if agent
+                                .past_selected_actions()
+                                .contains_key(&AgentAction::AcceptBribe.to_string())
+                                && !agent
+                                    .past_selected_actions()
+                                    .contains_key(&AgentAction::AssassinationVictim.to_string())
+                            {
+                                usernames.push(username);
+                                character_assassination_events.push(
+                                    NightEvent::CharacterAssassination {
+                                        username: username.clone(),
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Apply agent actions and set night events
                 for (id, client) in clients.iter_mut() {
                     let try_agent = agents.get(client.username());
 
-                    if try_agent.is_none() {
-                        _to_remove.push(id.clone());
-                        continue;
-                    }
                     let agent = &mut try_agent
                         .expect("Client agent should exist in persisted agents.")
                         .clone();
@@ -228,6 +232,7 @@ impl AppServer {
                                     .collect::<Vec<NightEvent>>();
 
                                 agent.set_available_night_events(events);
+                                client.clear_selected_event_index();
                             }
                             client.tick_render_counter();
                         }
@@ -235,22 +240,6 @@ impl AppServer {
 
                     agents.insert(agent.username().to_string(), agent.clone());
                 }
-
-                // Update market if necessary
-                if last_market_tick.elapsed().expect("Time flows backwards")
-                    > Duration::from_millis(MARKET_TICK_INTERVAL_MILLIS)
-                {
-                    market.tick();
-                    last_market_tick = SystemTime::now();
-                }
-
-                // for stonk in market.stonks.iter_mut() {
-                //     let allocated_shares = agents
-                //         .iter()
-                //         .map(|(_, agent)| agent.owned_stonks()[stonk.id])
-                //         .sum::<u32>();
-                //     stonk.allocated_shares = allocated_shares;
-                // }
 
                 // Draw to client TUI
                 let number_of_players = clients.len();
