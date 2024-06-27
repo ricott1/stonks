@@ -355,7 +355,8 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
                 Cell::new(format!("\n{:+.2}%", today_variation)).style(today_style),
                 Cell::new(format!("\n{:+.2}%", max_variation)).style(max_style),
                 Cell::new(format!("\n{:.2}%", agent_share)).style(agent_style),
-                Cell::new(format!("\n${:.0}", agent_stonk_value)).style(agent_stonk_style),
+                Cell::new(format!("\n${}", format_value(agent_stonk_value)))
+                    .style(agent_stonk_style),
                 Cell::new(market_cap_text).style(max_style),
                 Cell::new(top_shareholders),
             ])
