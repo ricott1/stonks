@@ -296,6 +296,7 @@ impl AppServer {
             auth_rejection_time: std::time::Duration::from_secs(2),
             auth_rejection_time_initial: Some(std::time::Duration::from_secs(0)),
             keys: vec![key_pair],
+            keepalive_interval: Some(std::time::Duration::from_secs(30)),
             ..Default::default()
         };
 
