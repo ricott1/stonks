@@ -344,18 +344,14 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
                 .collect::<Vec<Line>>();
 
             let market_cap = stonk.market_cap_dollars();
-            let market_cap_text = if market_cap > 1_000_000.0 {
-                format!("\n${:.3}M", market_cap / 1_000_000.0)
-            } else if market_cap > 1_000.0 {
-                format!("\n${:.3}k", market_cap / 1_000.0)
-            } else {
-                format!("\n${}", market_cap as u32)
-            };
+            let market_cap_text = format!("\n${}", format_value(market_cap));
 
             Row::new(vec![
                 Cell::new(format!("\n{}", stonk.name)),
-                Cell::new(format!("\n${:.2}", stonk.buy_price_dollars())).style(Style::default()),
-                Cell::new(format!("\n${:.2}", stonk.sell_price_dollars())).style(Style::default()),
+                Cell::new(format!("\n${}", format_value(stonk.buy_price_dollars())))
+                    .style(Style::default()),
+                Cell::new(format!("\n${}", format_value(stonk.sell_price_dollars())))
+                    .style(Style::default()),
                 Cell::new(format!("\n{:+.2}%", today_variation)).style(today_style),
                 Cell::new(format!("\n{:+.2}%", max_variation)).style(max_style),
                 Cell::new(format!("\n{:.2}%", agent_share)).style(agent_style),
@@ -379,13 +375,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
     avg_agent_share /= total_number_of_shares;
 
     let total_market_cap = market.total_market_cap_dollars();
-    let total_market_cap_text = if total_market_cap > 1_000_000.0 {
-        format!("\n${:.3}M", total_market_cap / 1_000_000.0)
-    } else if total_market_cap > 1_000.0 {
-        format!("\n${:.3}k", total_market_cap / 1_000.0)
-    } else {
-        format!("\n${}", total_market_cap as u32)
-    };
+    let total_market_cap_text = format!("\n${}", format_value(total_market_cap));
 
     let total_max_variation_style = (avg_max_variation / 10.0).style();
 
@@ -395,13 +385,8 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
         .take(3)
         .map(|(holder, amount)| {
             let amount_dollars = *amount as f64 / 100.0;
-            let amount_text = if amount_dollars > 1_000_000.0 {
-                format!("${:.3}M", amount_dollars / 1_000_000.0)
-            } else if amount_dollars > 1_000.0 {
-                format!("${:.3}k", amount_dollars / 1_000.0)
-            } else {
-                format!("${}", amount_dollars as u32)
-            };
+            let amount_text = format!("${}", format_value(amount_dollars));
+
             Line::from(format!("{} {}", holder, amount_text))
         })
         .collect::<Vec<Line>>();
@@ -413,7 +398,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
         Cell::new(format!("\n{:+.2}%", avg_today_variation)).style(avg_today_variation.style()),
         Cell::new(format!("\n{:+.2}%", avg_max_variation)).style(total_max_variation_style),
         Cell::new(format!("\n{:.2}%", avg_agent_share)).style(avg_agent_share.ustyle()),
-        Cell::new(format!("\n${:.0}", total_agent_stonk_value))
+        Cell::new(format!("\n${}", format_value(total_agent_stonk_value)))
             .style(total_agent_stonk_value.style()),
         Cell::new(total_market_cap_text).style(total_max_variation_style),
         Cell::new(top_portfolios),
@@ -780,6 +765,18 @@ fn clear(frame: &mut Frame) {
     }
     let clear = Paragraph::new(lines).style(Color::White);
     frame.render_widget(clear, area);
+}
+
+fn format_value(value: f64) -> String {
+    if value > 1_000_000.0 {
+        format!("{:.3}M", value / 1_000_000.0)
+    } else if value > 1_000.0 {
+        format!("{:.3}k", value / 1_000.0)
+    } else if value >= 100.0 {
+        format!("{:0}", value as u32)
+    } else {
+        format!("{:2}", value)
+    }
 }
 
 fn render_header(
