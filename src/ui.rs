@@ -336,7 +336,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
                 .map(|(holder, amount)| {
                     let agent_share = stonk.to_stake(*amount) * 100.0;
                     let agent_style = agent_share.ustyle();
-                    Line::from(format!("{} {:.3}%", holder, agent_share)).style(agent_style)
+                    Line::from(format!("{} {:.2}%", holder, agent_share)).style(agent_style)
                 })
                 .collect::<Vec<Line>>();
 
@@ -351,7 +351,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
                     .style(Style::default()),
                 Cell::new(format!("\n{:+.2}%", today_variation)).style(today_style),
                 Cell::new(format!("\n{:+.2}%", max_variation)).style(max_style),
-                Cell::new(format!("\n{:.3}%", agent_share)).style(agent_style),
+                Cell::new(format!("\n{:.2}%", agent_share)).style(agent_style),
                 Cell::new(format!("\n${}", format_value(agent_stonk_value)))
                     .style(agent_stonk_style),
                 Cell::new(market_cap_text).style(max_style),
