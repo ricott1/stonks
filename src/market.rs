@@ -98,8 +98,7 @@ pub struct Market {
     pub stonks: [Stonk; NUMBER_OF_STONKS],
     pub last_tick: usize,
     pub phase: GamePhase,
-    #[serde(default)]
-    initial_total_market_cap: u64,
+    pub initial_total_market_cap: u64,
     #[serde(default)]
     target_total_market_cap: u64,
     #[serde(default)]
@@ -200,6 +199,7 @@ impl Market {
 
         let global_drift = if self.last_tick % DAY_LENGTH == 0 {
             let drift = mean + rng.gen_range(-GLOBAL_DRIFT_VOLATILITY..GLOBAL_DRIFT_VOLATILITY);
+
             info!(
                 "Global drift: current cap {}, target cap {}, global drift {}",
                 current_market_cap, self.target_total_market_cap, drift
