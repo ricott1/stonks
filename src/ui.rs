@@ -315,7 +315,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
 
             let max_style = (max_variation / 10.0).style();
 
-            let agent_share = stonk.to_stake(agent.owned_stonks()[stonk.id]);
+            let agent_share = stonk.to_stake(agent.owned_stonks()[stonk.id]) * 100.0;
             avg_agent_share += agent_share * stonk.number_of_shares as f64;
             let agent_style = agent_share.ustyle();
 
@@ -351,7 +351,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
                     .style(Style::default()),
                 Cell::new(format!("\n{:+.2}%", today_variation)).style(today_style),
                 Cell::new(format!("\n{:+.2}%", max_variation)).style(max_style),
-                Cell::new(format!("\n{:.2}%", agent_share)).style(agent_style),
+                Cell::new(format!("\n{:.3}%", agent_share)).style(agent_style),
                 Cell::new(format!("\n${}", format_value(agent_stonk_value)))
                     .style(agent_stonk_style),
                 Cell::new(market_cap_text).style(max_style),
