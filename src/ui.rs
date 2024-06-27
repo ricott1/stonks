@@ -262,8 +262,8 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
         "Max +/-",
         "Stake",
         "Value",
-        "Top Shareholders",
         "Market cap",
+        "Top Shareholders",
     ]
     .into_iter()
     .map(Cell::from)
@@ -327,7 +327,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
 
             avg_max_variation += max_variation * stonk.number_of_shares as f64;
 
-            let max_style = (max_variation / 5.0).style();
+            let max_style = (max_variation / 10.0).style();
 
             let agent_share = stonk.to_stake(agent.owned_stonks()[stonk.id]);
             avg_agent_share += agent_share * stonk.number_of_shares as f64;
@@ -374,8 +374,8 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
                 Cell::new(format!("\n{:+.2}%", max_variation)).style(max_style),
                 Cell::new(format!("\n{:.2}%", agent_share)).style(agent_style),
                 Cell::new(format!("\n${:.0}", agent_stonk_value)).style(agent_stonk_style),
-                Cell::new(top_shareholders),
                 Cell::new(market_cap_text).style(max_style),
+                Cell::new(top_shareholders),
             ])
             .style(Style::new().fg(colors.row_fg).bg(color))
             .height(3)
@@ -400,7 +400,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
         format!("\n${}", total_market_cap as u32)
     };
 
-    let total_max_variation_style = (avg_max_variation / 5.0).style();
+    let total_max_variation_style = (avg_max_variation / 10.0).style();
 
     // let total_top_shareholders = stonk
     //     .shareholders
@@ -422,8 +422,8 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
         Cell::new(format!("\n{:.2}%", avg_agent_share)).style(avg_agent_share.ustyle()),
         Cell::new(format!("\n${:.0}", total_agent_stonk_value))
             .style(total_agent_stonk_value.style()),
-        Cell::new(""),
         Cell::new(total_market_cap_text).style(total_max_variation_style),
+        Cell::new(""),
     ])
     .style(Style::new().fg(colors.header_fg).bg(colors.header_bg))
     .height(3);
@@ -441,8 +441,8 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
             Constraint::Length(10),
             Constraint::Length(10),
             Constraint::Length(10),
-            Constraint::Length(20),
-            Constraint::Length(10),
+            Constraint::Length(12),
+            Constraint::Length(24),
         ],
     )
     .header(header)
@@ -728,7 +728,7 @@ fn render_stonk(
     }
 
     let n_y_labels = area.height as usize / 6;
-    let y_labels: Vec<Span<'static>> = (0..n_y_labels)
+    let y_labels: Vec<Span<'static>> = (0..=n_y_labels)
         .map(|r| {
             format!(
                 "{:>6}",

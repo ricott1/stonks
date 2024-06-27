@@ -48,7 +48,8 @@ pub struct Stonk {
 
 impl Stonk {
     fn sort_shareholders(&mut self) {
-        self.shareholders.sort_by(|(_, a), (_, b)| b.cmp(a))
+        self.shareholders.retain(|(_, amount)| *amount > 0);
+        self.shareholders.sort_by(|(_, a), (_, b)| b.cmp(a));
     }
 
     pub fn to_stake(&self, amount: u32) -> f64 {
