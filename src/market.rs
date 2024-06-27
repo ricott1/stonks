@@ -148,7 +148,7 @@ impl Market {
     pub fn tick(&mut self) {
         debug!("\nMarket tick {:?}", self.phase);
         for stonk in self.stonks.iter() {
-            info!(
+            debug!(
                 "Stonk availability: {} out of {} ({} bought)",
                 stonk.available_amount(),
                 stonk.number_of_shares,
