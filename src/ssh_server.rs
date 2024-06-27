@@ -225,6 +225,7 @@ impl AppServer {
                                     .map(|e| e.clone())
                                     .collect::<Vec<NightEvent>>();
 
+                                agent.clear_action();
                                 agent.set_available_night_events(events);
                             }
                             client.tick_render_counter();

@@ -774,7 +774,7 @@ fn format_value(value: f64) -> String {
     } else if value > 1_000.0 {
         format!("{:.3}k", value / 1_000.0)
     } else if value >= 100.0 {
-        format!("{:0}", value as u32)
+        format!("{}", value as u32)
     } else {
         format!("{:2}", value)
     }
