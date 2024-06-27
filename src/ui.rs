@@ -294,7 +294,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
                 0
             };
 
-            let today_variation = if today_initial_price > 0  {
+            let today_variation = if today_initial_price > 0 {
                 (stonk.price_per_share_in_cents as f64 - today_initial_price as f64)
                     / (today_initial_price as f64)
                     * 100.0
@@ -306,11 +306,10 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
 
             let today_style = today_variation.style();
 
-            let max_variation = 
-                (stonk.price_per_share_in_cents as f64 - stonk.starting_price as f64)
-                    / (stonk.starting_price as f64)
-                    * 100.0
-            };
+            let max_variation = (stonk.price_per_share_in_cents as f64
+                - stonk.starting_price as f64)
+                / (stonk.starting_price as f64)
+                * 100.0;
 
             avg_max_variation += max_variation * stonk.number_of_shares as f64;
 
