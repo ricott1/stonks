@@ -236,9 +236,9 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
     .style(header_style)
     .height(1);
 
-    let mut total_today_variation = 0.0;
-    let mut total_max_variation = 0.0;
-    let mut total_agent_share = 0.0;
+    let mut avg_today_variation = 0.0;
+    let mut avg_max_variation = 0.0;
+    let mut avg_agent_share = 0.0;
     let mut total_agent_stonk_value = 0.0;
     let mut total_market_cap = 0.0;
 
@@ -278,7 +278,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
                 0.0
             };
 
-            total_today_variation += today_variation;
+            avg_today_variation += today_variation;
 
             let today_style = today_variation.style();
 
@@ -290,12 +290,12 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
                 0.0
             };
 
-            total_max_variation += max_variation;
+            avg_max_variation += max_variation;
 
             let max_style = (max_variation / 5.0).style();
 
             let agent_share = stonk.to_stake(agent.owned_stonks()[stonk.id]);
-            total_agent_share += agent_share;
+            avg_agent_share += agent_share;
             let agent_style = agent_share.ustyle();
 
             let agent_stonk_value = agent.owned_stonks()[stonk.id] as f64
@@ -345,11 +345,9 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
         })
         .collect::<Vec<Row>>();
 
-    total_today_variation /= market.stonks.len() as f64;
-    total_max_variation /= market.stonks.len() as f64;
-    total_agent_share /= market.stonks.len() as f64;
-    total_agent_stonk_value /= market.stonks.len() as f64;
-    total_market_cap /= market.stonks.len() as f64;
+    avg_today_variation /= market.stonks.len() as f64;
+    avg_max_variation /= market.stonks.len() as f64;
+    avg_agent_share /= market.stonks.len() as f64;
 
     let total_market_cap_text = if total_market_cap > 10_000_000.0 {
         format!("\n${:.0}M", total_market_cap / 1_000_000.0)
@@ -359,7 +357,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
         format!("\n${}", total_market_cap as u32)
     };
 
-    let total_max_variation_style = (total_max_variation / 5.0).style();
+    let total_max_variation_style = (avg_max_variation / 5.0).style();
 
     // let total_top_shareholders = stonk
     //     .shareholders
@@ -376,15 +374,15 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
         Cell::new(format!("\nTotal")),
         Cell::new(format!("\n")),
         Cell::new(format!("\n")),
-        Cell::new(format!("\n{:+.2}%", total_today_variation)).style(total_today_variation.style()),
-        Cell::new(format!("\n{:+.2}%", total_max_variation)).style(total_max_variation_style),
-        Cell::new(format!("\n{:.2}%", total_agent_share * 100.0)).style(total_agent_share.style()),
+        Cell::new(format!("\n{:+.2}%", avg_today_variation)).style(avg_today_variation.style()),
+        Cell::new(format!("\n{:+.2}%", avg_max_variation)).style(total_max_variation_style),
+        Cell::new(format!("\n{:.2}%", avg_agent_share * 100.0)).style(avg_agent_share.style()),
         Cell::new(format!("\n${:.0}", total_agent_stonk_value))
             .style(total_agent_stonk_value.style()),
         Cell::new("total_top_shareholders"),
         Cell::new(total_market_cap_text).style(total_max_variation_style),
     ])
-    .style(Style::new().fg(colors.header_bg).bg(colors.header_fg))
+    .style(Style::new().fg(colors.header_fg).bg(colors.header_bg))
     .height(3);
 
     rows.push(total_row);
@@ -709,12 +707,6 @@ fn render_stonk(
     } else {
         stonk.info(agent.owned_stonks()[stonk.id])
     };
-
-    info!(
-        "{} {:#?}",
-        agent.has_condition(AgentCondition::UltraVision),
-        agent.conditions()
-    );
 
     let chart = Chart::new(datasets)
         .block(

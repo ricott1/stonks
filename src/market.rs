@@ -224,7 +224,7 @@ impl Market {
                 AgentAction::BumpStonkClass { class } => {
                     for stonk in self.stonks.iter_mut().filter(|s| s.class == *class) {
                         stonk.add_condition(
-                            StonkCondition::Bump { amount: 5.0 },
+                            StonkCondition::Bump { amount: 10.0 },
                             self.last_tick + DAY_LENGTH,
                         )
                     }
@@ -232,7 +232,7 @@ impl Market {
                 AgentAction::CrashAll => {
                     for stonk in self.stonks.iter_mut() {
                         stonk.add_condition(
-                            StonkCondition::Bump { amount: -5.0 },
+                            StonkCondition::Bump { amount: -10.0 },
                             self.last_tick + DAY_LENGTH,
                         );
                         stonk.add_condition(
@@ -266,7 +266,9 @@ impl Market {
                             let stonk = &mut self.stonks[stonk_id];
                             let stake = stonk.to_stake(amount);
                             stonk.add_condition(
-                                StonkCondition::Bump { amount: stake },
+                                StonkCondition::Bump {
+                                    amount: 10.0 * stake,
+                                },
                                 self.last_tick + DAY_LENGTH,
                             );
                             stonk.add_condition(

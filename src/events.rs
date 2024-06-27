@@ -6,7 +6,6 @@ use crate::{
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
-use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 const A_GOOD_OFFER_PROBABILITY: f64 = 0.99994;

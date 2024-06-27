@@ -187,15 +187,15 @@ impl Stonk {
         self.drift /= 2.0;
         if price_drift > 0.0 {
             if self.drift > 0.0 {
-                self.add_condition(StonkCondition::Bump { amount: 0.01 }, current_tick + 1);
+                self.add_condition(StonkCondition::Bump { amount: 1.0 }, current_tick + 1);
             } else {
-                self.add_condition(StonkCondition::Bump { amount: 0.025 }, current_tick + 3);
+                self.add_condition(StonkCondition::Bump { amount: 2.5 }, current_tick + 3);
             }
         } else if price_drift < 0.0 {
             if self.drift > 0.0 {
-                self.add_condition(StonkCondition::Bump { amount: -0.01 }, current_tick + 3);
+                self.add_condition(StonkCondition::Bump { amount: -1.0 }, current_tick + 3);
             } else {
-                self.add_condition(StonkCondition::Bump { amount: -0.025 }, current_tick + 1);
+                self.add_condition(StonkCondition::Bump { amount: -2.5 }, current_tick + 1);
             }
         }
 
@@ -203,7 +203,7 @@ impl Stonk {
 
         // Add control mechanisms for extreme prices. not ideal.
         if (self.price_per_share_in_cents as f64) < self.starting_price as f64 / 8.0 {
-            self.add_condition(StonkCondition::Bump { amount: 0.25 }, current_tick + 1);
+            self.add_condition(StonkCondition::Bump { amount: 2.5 }, current_tick + 1);
             self.add_condition(
                 StonkCondition::SetShockProbability {
                     value: 0.0,
@@ -212,7 +212,7 @@ impl Stonk {
                 current_tick + 1,
             );
         } else if (self.price_per_share_in_cents as f64) > self.starting_price as f64 * 16.0 {
-            self.add_condition(StonkCondition::Bump { amount: -0.25 }, current_tick + 1);
+            self.add_condition(StonkCondition::Bump { amount: -2.5 }, current_tick + 1);
             self.add_condition(
                 StonkCondition::SetShockProbability {
                     value: 0.0,

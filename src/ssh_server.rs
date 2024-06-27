@@ -177,6 +177,8 @@ impl AppServer {
                         .expect("Client agent should exist in persisted agents.")
                         .clone();
 
+                    agent.apply_conditions(market.last_tick);
+
                     match market.phase {
                         GamePhase::Day { .. } => {
                             client.clear_render_counter();
