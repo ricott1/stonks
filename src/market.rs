@@ -147,6 +147,14 @@ impl Market {
 
     pub fn tick(&mut self) {
         debug!("\nMarket tick {:?}", self.phase);
+        for stonk in self.stonks.iter() {
+            info!(
+                "Stonk availability: {} out of {} ({} bought)",
+                stonk.available_amount(),
+                stonk.number_of_shares,
+                stonk.allocated_shares
+            );
+        }
         let rng = &mut ChaCha8Rng::from_entropy();
         match self.phase {
             GamePhase::Day { cycle, counter } => {

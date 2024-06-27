@@ -35,7 +35,7 @@ pub struct Stonk {
     pub description: String,
     pub price_per_share_in_cents: u32, //price is to be intended in cents, and displayed accordingly
     pub number_of_shares: u32,
-    allocated_shares: u32,
+    pub allocated_shares: u32,
     pub shareholders: Vec<(String, u32)>, // List of shareholders, always sorted from biggest to smallest.
     drift: f64,            // Cauchy dist mean, changes the mean price percentage variation
     drift_volatility: f64, // Influences the rate of change of drift, must be positive
