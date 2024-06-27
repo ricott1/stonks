@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     agent::{AgentAction, AgentCondition, DecisionAgent, UserAgent, INITIAL_USER_CASH_CENTS},
+    events::CHARACTER_ASSASSINATION_COST,
     stonk::{Stonk, StonkCondition},
     utils::{load_stonks_data, AppResult},
 };
@@ -384,6 +385,7 @@ impl Market {
                                 self.last_tick + DAY_LENGTH,
                             );
                         }
+                        agent.sub_cash(CHARACTER_ASSASSINATION_COST)?;
                     }
                 }
                 AgentAction::AssassinationVictim => {}

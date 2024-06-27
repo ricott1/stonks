@@ -10,6 +10,7 @@ use strum_macros::EnumIter;
 
 const A_GOOD_OFFER_PROBABILITY: f64 = 0.4;
 const LUCKY_NIGHT_PROBABILITY: f64 = 0.25;
+pub const CHARACTER_ASSASSINATION_COST: u32 = 5_000 * 100;
 
 #[derive(Debug, Clone, EnumIter, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum NightEvent {
@@ -180,7 +181,7 @@ impl NightEvent {
                     //     .enumerate()
                     //     .map(|(stonk_id, &amount)| 100.0 * market.stonks[stonk_id].to_stake(amount))
                     //     .any(|s| s > 5.0);
-                    username != agent.username()
+                    username != agent.username() && agent.cash() > CHARACTER_ASSASSINATION_COST
                     // && has_any_large_stake
                 })
             }
@@ -227,7 +228,8 @@ impl NightEvent {
             Self::CharacterAssassination { username, .. } => vec![
                 format!("{username} took a special offer"),
                 "in the past and got too".to_string(),
-                "greedy now.".to_string(),
+                "greedy now;".to_string(),
+                format!("Cash >= {}.", CHARACTER_ASSASSINATION_COST),
             ],
             Self::AGoodOffer => vec![
                 "Random chance,".to_string(),
