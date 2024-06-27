@@ -77,9 +77,7 @@ impl AppServer {
             save_market(&m)?;
             m
         } else {
-            let mut m = load_market()?;
-            let fix_m = Market::default();
-            m.initial_total_market_cap = fix_m.initial_total_market_cap;
+            let m = load_market()?;
             info!("Loading market. Starting back from {:#?}", m.phase);
 
             m

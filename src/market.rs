@@ -98,7 +98,7 @@ pub struct Market {
     pub stonks: [Stonk; NUMBER_OF_STONKS],
     pub last_tick: usize,
     pub phase: GamePhase,
-    pub initial_total_market_cap: u64,
+    initial_total_market_cap: u64,
     #[serde(default)]
     target_total_market_cap: u64,
     #[serde(default)]
