@@ -45,8 +45,9 @@ impl NightEvent {
         let mut description = match self {
             Self::War => vec![
                 "It's war time!".to_string(),
-                "Chance for all war stonks".to_string(),
-                "to get a big bump.".to_string(),
+                "Of course it's a tragedy,".to_string(),
+                "you wouldn't want to pass".to_string(),
+                "on those sweet profits.".to_string(),
             ],
             Self::ColdWinter => vec![
                 "Apparently next winter".to_string(),
@@ -92,7 +93,7 @@ impl NightEvent {
                 "pay later (maybe).".to_string(),
             ],
             Self::LuckyNight => vec![
-                "You've found a $100 ".to_string(),
+                "You've found $100 ".to_string(),
                 "on the ground.".to_string(),
                 "Che culo!".to_string(),
             ],

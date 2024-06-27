@@ -112,7 +112,7 @@
         "class": "Commodity",
         "name": "Yuppies we are",
         "short_name": "YUWA",
-        "description": "",
+        "description": "Russian gas, spanish love.",
         "price_per_share_in_cents": 80000,
         "number_of_shares": 17000,
         "allocated_shares": 0,

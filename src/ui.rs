@@ -879,6 +879,7 @@ fn render_footer(
             } else {
                 0
             };
+
             lines.push(
                 format!(
                     "{:28} {:28} {:28}",
@@ -904,9 +905,14 @@ fn render_footer(
             lines.push(
                 format!(
                     "{:28} {:28} {:28}",
-                    format!("`s`: sell x1 (${:.2})", stonk.sell_price_dollars()),
                     format!(
-                        "`S`: sell x100 (${:.2})",
+                        "`s`: sell x{} (${:.2})",
+                        1.min(owned_amount),
+                        stonk.sell_price_dollars()
+                    ),
+                    format!(
+                        "`S`: sell x{} (${:.2})",
+                        100.min(owned_amount),
                         100.0 * stonk.sell_price_dollars()
                     ),
                     format!(
