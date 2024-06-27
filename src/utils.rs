@@ -290,7 +290,7 @@ mod tests {
     use super::{save_agents, AppResult};
     use crate::{
         agent::{DecisionAgent, UserAgent},
-        ssh_server::SessionAuth,
+        ssh_client::SessionAuth,
     };
     use directories;
     use std::{collections::HashMap, fs::File};

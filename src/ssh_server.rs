@@ -1,9 +1,7 @@
 use crate::agent::{AgentAction, DecisionAgent, UserAgent};
 use crate::events::NightEvent;
 use crate::market::{GamePhase, Market, HISTORICAL_SIZE, MAX_EVENTS_PER_NIGHT};
-use crate::ssh_backend::SSHBackend;
-use crate::tui::Tui;
-use crate::ui::UiOptions;
+use crate::ssh_client::{Client, SessionAuth};
 use crate::utils::*;
 use async_trait::async_trait;
 use crossterm::event::*;
@@ -11,11 +9,9 @@ use rand::seq::SliceRandom;
 use rand::{Rng, RngCore, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use rand_distr::Alphanumeric;
-use russh::{server::*, Channel, ChannelId, CryptoVec, Disconnect, Pty};
+use russh::{server::*, Channel, ChannelId, Disconnect, Pty};
 use russh_keys::key::PublicKey;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fmt::Debug;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -36,198 +32,6 @@ const MAX_USER_LENGTH: usize = 16;
 
 static AUTH_PASSWORD_SALT: &'static str = "gbasfhgE4Fvb";
 static AUTH_PUBLIC_KEY_SALT: &'static str = "fa2RR4fq9XX9";
-
-#[derive(Clone)]
-pub struct TerminalHandle {
-    handle: Handle,
-    // The sink collects the data which is finally flushed to the handle.
-    sink: Vec<u8>,
-    channel_id: ChannelId,
-}
-
-impl Debug for TerminalHandle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("TerminalHandle")
-            .field("sink", &self.sink)
-            .field("channel_id", &self.channel_id)
-            .finish()
-    }
-}
-
-impl TerminalHandle {
-    pub async fn close(&self) -> AppResult<()> {
-        self.handle
-            .close(self.channel_id)
-            .await
-            .map_err(|_| anyhow::anyhow!("Close terminal error"))?;
-        self.handle
-            .disconnect(Disconnect::ByApplication, "Game quit".into(), "".into())
-            .await?;
-        Ok(())
-    }
-
-    async fn _flush(&self) -> std::io::Result<usize> {
-        let handle = self.handle.clone();
-        let channel_id = self.channel_id.clone();
-        let data: CryptoVec = self.sink.clone().into();
-        let data_length = data.len();
-        if let Err(err_data) = handle.data(channel_id, data).await {
-            return Ok(err_data.len());
-        }
-        Ok(data_length)
-    }
-}
-
-// The crossterm backend writes to the terminal handle.
-impl std::io::Write for TerminalHandle {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.sink.extend_from_slice(buf);
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        futures::executor::block_on(self._flush())?;
-        self.sink.clear();
-        Ok(())
-    }
-}
-
-struct Client {
-    tui: Tui,
-    ui_options: UiOptions,
-    username: String,
-}
-
-impl Client {
-    pub fn handle_key_events(
-        &mut self,
-        key_event: KeyEvent,
-        market: &Market,
-        agent: &mut UserAgent,
-    ) -> AppResult<()> {
-        match key_event.code {
-            crossterm::event::KeyCode::Enter | crossterm::event::KeyCode::Backspace => {
-                match market.phase {
-                    GamePhase::Day { .. } => {
-                        if let Some(_) = self.ui_options.focus_on_stonk {
-                            self.ui_options.reset();
-                        } else {
-                            self.ui_options.select_stonk();
-                        }
-                    }
-                    GamePhase::Night { .. } => {
-                        if agent.selected_action().is_none() {
-                            if let Some(idx) = self.ui_options.selected_event_card_index {
-                                if idx < agent.available_night_events().len() {
-                                    let event = agent.available_night_events()[idx].clone();
-                                    let action = event.action();
-                                    agent.select_action(action);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            KeyCode::Char('b') => {
-                let stonk_id = if let Some(stonk_id) = self.ui_options.focus_on_stonk {
-                    stonk_id
-                } else {
-                    self.ui_options.selected_stonk_index
-                };
-
-                let stonk = &market.stonks[stonk_id];
-                let max_buy_amount = if stonk.buy_price() > 0 {
-                    (agent.cash() / stonk.buy_price()).min(stonk.available_amount())
-                } else {
-                    0
-                };
-                let amount = if key_event.modifiers == KeyModifiers::SHIFT {
-                    100
-                } else {
-                    1
-                }
-                .min(max_buy_amount);
-
-                agent.select_action(AgentAction::Buy { stonk_id, amount })
-            }
-
-            KeyCode::Char('m') => {
-                let stonk_id = if let Some(stonk_id) = self.ui_options.focus_on_stonk {
-                    stonk_id
-                } else {
-                    self.ui_options.selected_stonk_index
-                };
-                let stonk = &market.stonks[stonk_id];
-                let max_buy_amount = if stonk.buy_price() > 0 {
-                    (agent.cash() / stonk.buy_price()).min(stonk.available_amount())
-                } else {
-                    0
-                };
-                agent.select_action(AgentAction::Buy {
-                    stonk_id,
-                    amount: max_buy_amount,
-                })
-            }
-
-            KeyCode::Char('s') => {
-                let stonk_id = if let Some(stonk_id) = self.ui_options.focus_on_stonk {
-                    stonk_id
-                } else {
-                    self.ui_options.selected_stonk_index
-                };
-                let amount = if key_event.modifiers == KeyModifiers::SHIFT {
-                    100
-                } else {
-                    1
-                };
-                agent.select_action(AgentAction::Sell { stonk_id, amount })
-            }
-
-            KeyCode::Char('d') => {
-                let stonk_id = if let Some(stonk_id) = self.ui_options.focus_on_stonk {
-                    stonk_id
-                } else {
-                    self.ui_options.selected_stonk_index
-                };
-                let amount = agent.owned_stonks()[stonk_id];
-                agent.select_action(AgentAction::Sell { stonk_id, amount })
-            }
-
-            key_code => {
-                self.ui_options.handle_key_events(key_code, agent)?;
-            }
-        }
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SessionAuth {
-    pub(crate) username: String,
-    hashed_password: u64,
-    last_active_time: SystemTime,
-}
-
-impl Default for SessionAuth {
-    fn default() -> Self {
-        Self {
-            username: "".to_string(),
-            hashed_password: 0,
-            last_active_time: SystemTime::now(),
-        }
-    }
-}
-
-impl SessionAuth {
-    pub fn new(username: String, hashed_password: u64) -> Self {
-        Self {
-            username,
-            hashed_password,
-            last_active_time: SystemTime::now(),
-        }
-    }
-}
 
 #[derive(Clone)]
 pub struct AppServer {
@@ -338,7 +142,7 @@ impl AppServer {
                 // If the client did not do anything recently, it wil removed.
                 let mut _to_remove = vec![];
                 for (id, client) in clients.iter() {
-                    let try_agent = agents.get(&client.username);
+                    let try_agent = agents.get(client.username());
 
                     if try_agent.is_none() {
                         _to_remove.push(id.clone());
@@ -358,12 +162,12 @@ impl AppServer {
                     }
                 }
 
-                clients.retain(|_, c| !_to_remove.contains(&c.username));
+                clients.retain(|_, c| !_to_remove.contains(&c.username().to_string()));
 
                 // If the client did not do anything recently, it wil removed.
                 let mut _to_remove = vec![];
                 for (id, client) in clients.iter_mut() {
-                    let try_agent = agents.get(&client.username);
+                    let try_agent = agents.get(client.username());
 
                     if try_agent.is_none() {
                         _to_remove.push(id.clone());
@@ -375,8 +179,7 @@ impl AppServer {
 
                     match market.phase {
                         GamePhase::Day { .. } => {
-                            client.ui_options.render_counter = 0;
-                            client.ui_options.selected_event_card_index = None;
+                            client.clear_render_counter();
                             agent.set_available_night_events(vec![]);
                             if let Some(_) = agent.selected_action() {
                                 market
@@ -389,11 +192,19 @@ impl AppServer {
                         GamePhase::Night { .. } => {
                             // At the beginning of the night, set the available events.
                             // We set them here because we need the market data.
-                            if client.ui_options.render_counter == 0
+                            if client.render_counter() == 0
                                 && agent.available_night_events().len() == 0
                             {
                                 let mut events = NightEvent::iter()
-                                    .filter(|e| e.unlock_condition()(agent, &market))
+                                    .filter(|e| {
+                                        match e {
+                                            NightEvent::CharacterAssassination { .. } => {
+                                                return false
+                                            }
+                                            _ => {}
+                                        };
+                                        e.unlock_condition()(agent, &market)
+                                    })
                                     .collect::<Vec<NightEvent>>();
 
                                 for event in character_assassination_events.iter() {
@@ -412,12 +223,7 @@ impl AppServer {
 
                                 agent.set_available_night_events(events);
                             }
-                            client.ui_options.render_counter += 1;
-                            if agent.available_night_events().len() > 0
-                                && client.ui_options.selected_event_card_index.is_none()
-                            {
-                                client.ui_options.selected_event_card_index = Some(0);
-                            }
+                            client.tick_render_counter();
                         }
                     }
 
@@ -444,12 +250,11 @@ impl AppServer {
                 let number_of_players = clients.len();
                 for (_, client) in clients.iter_mut() {
                     let agent = agents
-                        .get(&client.username)
+                        .get(client.username())
                         .expect("Client agent should exist in persisted agents.");
 
                     client
-                        .tui
-                        .draw(&market, &agent, &client.ui_options, number_of_players)
+                        .draw(&market, &agent, number_of_players)
                         .unwrap_or_else(|e| debug!("Failed to draw: {}", e));
                 }
 
@@ -566,31 +371,26 @@ impl Handler for AppServer {
 
         let mut clients = self.clients.lock().await;
 
-        let terminal_handle = TerminalHandle {
-            handle: session.handle(),
-            sink: Vec::new(),
-            channel_id: channel.id(),
-        };
-
-        let backend = SSHBackend::new(terminal_handle, (160, 48));
-        let mut tui = Tui::new(backend)
-            .map_err(|e| anyhow::anyhow!("Failed to create terminal interface: {}", e))?;
-        tui.terminal
-            .clear()
-            .map_err(|e| anyhow::anyhow!("Failed to clear terminal: {}", e))?;
-
-        agent.session_auth.last_active_time = SystemTime::now();
+        agent.session_auth.update_last_active_time();
+        let username = agent.username().to_string();
         agents.insert(agent.username().to_string(), agent.clone());
 
-        let client = Client {
-            tui,
-            ui_options: UiOptions::new(),
-            username: agent.session_auth.username.clone(),
-        };
+        let try_client = Client::new(username.clone(), session.handle(), channel.id());
 
-        clients.insert(client.username.clone(), client);
+        if try_client.is_err() {
+            let error_string = format!("\n\rFailed to create client. sorry!\n",);
+            session.disconnect(Disconnect::ByApplication, error_string.as_str(), "");
+            session.close(channel.id());
+            return Ok(false);
+        }
 
-        debug!("Have fun {}!", agent.session_auth.username);
+        debug!("Have fun {}!", username);
+
+        clients.insert(
+            username,
+            try_client.expect("Client error has already been checked."),
+        );
+
         Ok(true)
     }
 
@@ -670,10 +470,10 @@ impl Handler for AppServer {
                     KeyCode::Esc => {
                         let mut agents = self.agents.lock().await;
                         let agent = agents
-                            .get_mut(&client.username)
+                            .get_mut(client.username())
                             .expect("Agent should have been persisted");
                         agent.clear_action();
-                        agent.session_auth.last_active_time = SystemTime::now();
+                        agent.session_auth.update_last_active_time();
                         client
                             .tui
                             .exit()
@@ -685,17 +485,16 @@ impl Handler for AppServer {
                         let market = self.market.lock().await;
                         let mut agents = self.agents.lock().await;
                         let agent = agents
-                            .get_mut(&client.username)
+                            .get_mut(client.username())
                             .expect("Agent should have been persisted");
 
-                        agent.session_auth.last_active_time = SystemTime::now();
+                        agent.session_auth.update_last_active_time();
                         client
                             .handle_key_events(key_event, &market, agent)
                             .map_err(|e| anyhow::anyhow!("Error: {}", e))?;
 
                         client
-                            .tui
-                            .draw(&market, &agent, &client.ui_options, number_of_players)
+                            .draw(&market, &agent, number_of_players)
                             .unwrap_or_else(|e| error!("Failed to draw: {}", e));
                     }
                 },

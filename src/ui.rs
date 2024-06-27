@@ -17,6 +17,7 @@ use ratatui::widgets::{
 };
 use ratatui::{layout::Layout, Frame};
 use std::fmt::{self};
+use tracing::info;
 
 const STONKS: [&'static str; 6] = [
     "███████╗████████╗ ██████╗ ███╗   ██╗██╗  ██╗███████╗██╗",
@@ -125,7 +126,7 @@ pub struct UiOptions {
     palette_index: usize,
     zoom_level: ZoomLevel,
     pub render_counter: usize,
-    pub selected_event_card_index: Option<usize>,
+    pub selected_event_card_index: usize,
 }
 
 impl UiOptions {
@@ -137,7 +138,7 @@ impl UiOptions {
             palette_index: 0,
             zoom_level: ZoomLevel::Short,
             render_counter: 0,
-            selected_event_card_index: None,
+            selected_event_card_index: 0,
         }
     }
 
@@ -162,22 +163,16 @@ impl UiOptions {
 
             crossterm::event::KeyCode::Left => {
                 if agent.selected_action().is_none() && num_night_events > 0 {
-                    if let Some(idx) = self.selected_event_card_index {
-                        self.selected_event_card_index =
-                            Some((idx + num_night_events - 1) % num_night_events)
-                    } else {
-                        self.selected_event_card_index = Some(0)
-                    }
+                    let idx = self.selected_event_card_index;
+                    self.selected_event_card_index =
+                        (idx + num_night_events - 1) % num_night_events;
                 }
             }
 
             crossterm::event::KeyCode::Right => {
                 if agent.selected_action().is_none() && num_night_events > 0 {
-                    if let Some(idx) = self.selected_event_card_index {
-                        self.selected_event_card_index = Some((idx + 1) % num_night_events)
-                    } else {
-                        self.selected_event_card_index = Some(0)
-                    }
+                    let idx = self.selected_event_card_index;
+                    self.selected_event_card_index = (idx + 1) % num_night_events
                 }
             }
 
@@ -241,142 +236,159 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
     .style(header_style)
     .height(1);
 
-    let rows = market.stonks.iter().enumerate().map(|(i, stonk)| {
-        let color = match i % 2 {
-            0 => colors.normal_row_color,
-            _ => colors.alt_row_color,
-        };
+    let mut total_today_variation = 0.0;
+    let mut total_max_variation = 0.0;
+    let mut total_agent_share = 0.0;
+    let mut total_agent_stonk_value = 0.0;
+    let mut total_market_cap = 0.0;
 
-        let n = market.last_tick % DAY_LENGTH;
-        let style = if n > 0 {
-            let last_n_prices = stonk.historical_prices.iter().rev().take(n);
-            let last_len = last_n_prices.len() as f64;
-            let mut last_minute_avg_price = 0.0;
+    let mut rows = market
+        .stonks
+        .iter()
+        .enumerate()
+        .map(|(i, stonk)| {
+            let color = match i % 2 {
+                0 => colors.normal_row_color,
+                _ => colors.alt_row_color,
+            };
 
-            for p in last_n_prices {
-                last_minute_avg_price += *p as f64 / last_len;
-            }
+            let n = market.last_tick % DAY_LENGTH;
+            let las_minute_avg_price_style = if n > 0 {
+                let last_n_prices = stonk.historical_prices.iter().rev().take(n);
+                let last_len = last_n_prices.len() as f64;
+                let mut last_minute_avg_price = 0.0;
 
-            if last_minute_avg_price > stonk.price_per_share_in_cents as f64 / 4.0 * 5.0 {
-                Style::default().red()
-            } else if last_minute_avg_price > stonk.price_per_share_in_cents as f64 {
-                Style::default().yellow()
-            } else if last_minute_avg_price < stonk.price_per_share_in_cents as f64 / 4.0 * 5.0 {
-                Style::default().light_green()
-            } else if last_minute_avg_price < stonk.price_per_share_in_cents as f64 {
-                Style::default().green()
+                for p in last_n_prices {
+                    last_minute_avg_price += *p as f64 / last_len;
+                }
+
+                (last_minute_avg_price / stonk.price_per_share_in_cents as f64).style()
             } else {
                 Style::default()
-            }
-        } else {
-            Style::default()
-        };
+            };
 
-        let today_initial_price = stonk.historical_prices[stonk.historical_prices.len() - n - 1];
+            let today_initial_price =
+                stonk.historical_prices[stonk.historical_prices.len() - n - 1];
 
-        let today_variation = if today_initial_price > 0 {
-            (stonk.price_per_share_in_cents as f64 - today_initial_price as f64)
-                / today_initial_price as f64
-                * 100.0
-        } else {
-            0.0
-        };
+            let today_variation = if today_initial_price > 0 {
+                (stonk.price_per_share_in_cents as f64 - today_initial_price as f64)
+                    / today_initial_price as f64
+                    * 100.0
+            } else {
+                0.0
+            };
 
-        let today_style = if today_variation > 5.0 {
-            Style::default().green()
-        } else if today_variation >= 1.0 {
-            Style::default().green()
-        } else if today_variation >= 0.1 {
-            Style::default().light_green()
-        } else if today_variation <= -1.0 {
-            Style::default().red()
-        } else if today_variation <= -0.1 {
-            Style::default().yellow()
-        } else {
-            Style::default()
-        };
+            total_today_variation += today_variation;
 
-        let max_variation = if stonk.historical_prices[0] > 0 {
-            (stonk.price_per_share_in_cents as f64 - stonk.historical_prices[0] as f64)
-                / stonk.historical_prices[0] as f64
-                * 100.0
-        } else {
-            0.0
-        };
+            let today_style = today_variation.style();
 
-        let max_style = if max_variation > 5.0 {
-            Style::default().green()
-        } else if max_variation >= 5.0 {
-            Style::default().green()
-        } else if max_variation >= 0.5 {
-            Style::default().light_green()
-        } else if max_variation <= -5.0 {
-            Style::default().red()
-        } else if max_variation <= -0.5 {
-            Style::default().yellow()
-        } else {
-            Style::default()
-        };
+            let max_variation = if stonk.historical_prices[0] > 0 {
+                (stonk.price_per_share_in_cents as f64 - stonk.historical_prices[0] as f64)
+                    / stonk.historical_prices[0] as f64
+                    * 100.0
+            } else {
+                0.0
+            };
 
-        let agent_share = stonk.to_stake(agent.owned_stonks()[stonk.id]);
+            total_max_variation += max_variation;
 
-        let agent_style = if agent_share >= 0.05 {
-            Style::default().magenta()
-        } else if agent_share >= 0.05 {
-            Style::default().light_magenta()
-        } else if agent_share >= 0.001 {
-            Style::default().cyan()
-        } else if agent_share >= 0.001 {
-            Style::default().light_cyan()
-        } else {
-            Style::default()
-        };
+            let max_style = (max_variation / 5.0).style();
 
-        let agent_stonk_value = (agent.owned_stonks()[stonk.id] as f64
-            * (stonk.price_per_share_in_cents as f64 / 100.0))
-            as u32;
+            let agent_share = stonk.to_stake(agent.owned_stonks()[stonk.id]);
+            total_agent_share += agent_share;
+            let agent_style = agent_share.ustyle();
 
-        let agent_stonk_style = if agent_stonk_value > 0 {
-            style
-        } else {
-            Style::default()
-        };
+            let agent_stonk_value = agent.owned_stonks()[stonk.id] as f64
+                * (stonk.price_per_share_in_cents as f64 / 100.0);
+            total_agent_stonk_value += agent_stonk_value;
 
-        let top_shareholders = stonk
-            .shareholders
-            .iter()
-            .take(3)
-            .map(|(holder, amount)| {
-                let agent_share = stonk.to_stake(*amount);
-                let agent_style = if agent_share >= 0.05 {
-                    Style::default().magenta()
-                } else if agent_share >= 0.05 {
-                    Style::default().light_magenta()
-                } else if agent_share >= 0.001 {
-                    Style::default().cyan()
-                } else if agent_share >= 0.001 {
-                    Style::default().light_cyan()
-                } else {
-                    Style::default()
-                };
-                Line::from(format!("{} {:.2}%", holder, agent_share * 100.0)).style(agent_style)
-            })
-            .collect::<Vec<Line>>();
+            let agent_stonk_style = if agent_stonk_value > 0.0 {
+                las_minute_avg_price_style
+            } else {
+                Style::default()
+            };
 
-        Row::new(vec![
-            Cell::new(format!("\n{}", stonk.name)),
-            Cell::new(format!("\n${:.2}", stonk.formatted_buy_price())).style(style),
-            Cell::new(format!("\n${:.2}", stonk.formatted_sell_price())).style(style),
-            Cell::new(format!("\n{:+.2}%", today_variation)).style(today_style),
-            Cell::new(format!("\n{:+.2}%", max_variation)).style(max_style),
-            Cell::new(format!("\n{:.2}%", agent_share * 100.0)).style(agent_style),
-            Cell::new(format!("\n${}", agent_stonk_value)).style(agent_stonk_style),
-            Cell::new(top_shareholders),
-            Cell::new(format!("\n${:.2}", stonk.formatted_market_cap())).style(style),
-        ])
-        .style(Style::new().fg(colors.row_fg).bg(color))
-        .height(3)
-    });
+            let top_shareholders = stonk
+                .shareholders
+                .iter()
+                .take(3)
+                .map(|(holder, amount)| {
+                    let agent_share = stonk.to_stake(*amount);
+                    let agent_style = agent_share.ustyle();
+                    Line::from(format!("{} {:.2}%", holder, agent_share * 100.0)).style(agent_style)
+                })
+                .collect::<Vec<Line>>();
+
+            let market_cap = stonk.market_cap_dollars();
+            total_market_cap += market_cap;
+            let market_cap_text = if market_cap > 10_000.0 {
+                format!("\n${:.0}k", market_cap / 1000.0)
+            } else {
+                format!("\n${}", market_cap as u32)
+            };
+
+            Row::new(vec![
+                Cell::new(format!("\n{}", stonk.name)),
+                Cell::new(format!("\n${:.2}", stonk.buy_price_dollars()))
+                    .style(las_minute_avg_price_style),
+                Cell::new(format!("\n${:.2}", stonk.sell_price_dollars()))
+                    .style(las_minute_avg_price_style),
+                Cell::new(format!("\n{:+.2}%", today_variation)).style(today_style),
+                Cell::new(format!("\n{:+.2}%", max_variation)).style(max_style),
+                Cell::new(format!("\n{:.2}%", agent_share * 100.0)).style(agent_style),
+                Cell::new(format!("\n${:.0}", agent_stonk_value)).style(agent_stonk_style),
+                Cell::new(top_shareholders),
+                Cell::new(market_cap_text).style(las_minute_avg_price_style),
+            ])
+            .style(Style::new().fg(colors.row_fg).bg(color))
+            .height(3)
+        })
+        .collect::<Vec<Row>>();
+
+    total_today_variation /= market.stonks.len() as f64;
+    total_max_variation /= market.stonks.len() as f64;
+    total_agent_share /= market.stonks.len() as f64;
+    total_agent_stonk_value /= market.stonks.len() as f64;
+    total_market_cap /= market.stonks.len() as f64;
+
+    let total_market_cap_text = if total_market_cap > 10_000_000.0 {
+        format!("\n${:.0}M", total_market_cap / 1_000_000.0)
+    } else if total_market_cap > 10_000.0 {
+        format!("\n${:.0}k", total_market_cap / 1_000.0)
+    } else {
+        format!("\n${}", total_market_cap as u32)
+    };
+
+    let total_max_variation_style = (total_max_variation / 5.0).style();
+
+    // let total_top_shareholders = stonk
+    //     .shareholders
+    //     .iter()
+    //     .take(3)
+    //     .map(|(holder, amount)| {
+    //         let agent_share = stonk.to_stake(*amount);
+    //         let agent_style = agent_share.ustyle();
+    //         Line::from(format!("{} {:.2}%", holder, agent_share * 100.0)).style(agent_style)
+    //     })
+    //     .collect::<Vec<Line>>();
+
+    let total_row = Row::new(vec![
+        Cell::new(format!("\nTotal")),
+        Cell::new(format!("\n")),
+        Cell::new(format!("\n")),
+        Cell::new(format!("\n{:+.2}%", total_today_variation)).style(total_today_variation.style()),
+        Cell::new(format!("\n{:+.2}%", total_max_variation)).style(total_max_variation_style),
+        Cell::new(format!("\n{:.2}%", total_agent_share * 100.0)).style(total_agent_share.style()),
+        Cell::new(format!("\n${:.0}", total_agent_stonk_value))
+            .style(total_agent_stonk_value.style()),
+        Cell::new("total_top_shareholders"),
+        Cell::new(total_market_cap_text).style(total_max_variation_style),
+    ])
+    .style(Style::new().fg(colors.header_bg).bg(colors.header_fg))
+    .height(3);
+
+    rows.push(total_row);
+
     let bar = " █ ";
     Table::new(
         rows,
@@ -504,9 +516,7 @@ fn render_night(
                         );
                     }
                 } else {
-                    if ui_options.selected_event_card_index.is_some()
-                        && ui_options.selected_event_card_index.unwrap() == i
-                    {
+                    if ui_options.selected_event_card_index == i {
                         frame.render_widget(
                             Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone())
                                 .block(Block::bordered().border_style(border_style)),
@@ -533,8 +543,7 @@ fn render_night(
                 }
 
                 let title_style = if agent.selected_action().is_some()
-                    && ui_options.selected_event_card_index.is_some()
-                    && ui_options.selected_event_card_index.unwrap() == i
+                    && ui_options.selected_event_card_index == i
                 {
                     Style::default().green()
                 } else {
@@ -701,6 +710,12 @@ fn render_stonk(
         stonk.info(agent.owned_stonks()[stonk.id])
     };
 
+    info!(
+        "{} {:#?}",
+        agent.has_condition(AgentCondition::UltraVision),
+        agent.conditions()
+    );
+
     let chart = Chart::new(datasets)
         .block(
             Block::bordered()
@@ -778,7 +793,7 @@ fn render_header(
     let header_text = format!(
         "{} - Cash: ${:<6.2} - {}",
         market.phase.formatted(),
-        agent.formatted_cash(),
+        agent.cash_dollars(),
         extra_text,
     );
 
@@ -847,17 +862,17 @@ fn render_footer(
                     format!(
                         "`b`: buy  x{} (${:.2})",
                         1.min(max_buy_amount),
-                        1.min(max_buy_amount) as f64 * stonk.formatted_buy_price()
+                        1.min(max_buy_amount) as f64 * stonk.buy_price_dollars()
                     ),
                     format!(
                         "`B`: buy  x{} (${:.2})",
                         100.min(max_buy_amount),
-                        100.min(max_buy_amount) as f64 * stonk.formatted_buy_price()
+                        100.min(max_buy_amount) as f64 * stonk.buy_price_dollars()
                     ),
                     format!(
                         "`m`: buy  x{} (${:.2})",
                         max_buy_amount,
-                        max_buy_amount as f64 * stonk.formatted_buy_price()
+                        max_buy_amount as f64 * stonk.buy_price_dollars()
                     ),
                 )
                 .into(),
@@ -866,15 +881,15 @@ fn render_footer(
             lines.push(
                 format!(
                     "{:28} {:28} {:28}",
-                    format!("`s`: sell x1 (${:.2})", stonk.formatted_sell_price()),
+                    format!("`s`: sell x1 (${:.2})", stonk.sell_price_dollars()),
                     format!(
                         "`S`: sell x100 (${:.2})",
-                        100.0 * stonk.formatted_sell_price()
+                        100.0 * stonk.sell_price_dollars()
                     ),
                     format!(
                         "`d`: sell x{} (${:.2})",
                         owned_amount,
-                        owned_amount as f64 * stonk.formatted_sell_price()
+                        owned_amount as f64 * stonk.sell_price_dollars()
                     ),
                 )
                 .into(),
@@ -939,4 +954,40 @@ pub fn render(
     render_footer(frame, market, agent, ui_options, split[3]);
 
     Ok(())
+}
+
+trait Styled {
+    fn style(&self) -> Style;
+    fn ustyle(&self) -> Style;
+}
+impl Styled for f64 {
+    fn style(&self) -> Style {
+        if *self >= 1.0 {
+            Style::default().green()
+        } else if *self >= 0.1 {
+            Style::default().light_green()
+        } else if *self <= -1.0 {
+            Style::default().red()
+        } else if *self <= -0.1 {
+            Style::default().yellow()
+        } else {
+            Style::default()
+        }
+    }
+
+    fn ustyle(&self) -> Style {
+        if *self > 50.0 {
+            Style::default().magenta()
+        } else if *self >= 10.0 {
+            Style::default().cyan()
+        } else if *self >= 5.0 {
+            Style::default().light_cyan()
+        } else if *self >= 1.0 {
+            Style::default().green()
+        } else if *self >= 0.1 {
+            Style::default().light_green()
+        } else {
+            Style::default()
+        }
+    }
 }

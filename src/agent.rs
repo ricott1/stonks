@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    events::NightEvent, market::NUMBER_OF_STONKS, ssh_server::SessionAuth, stonk::StonkClass,
+    events::NightEvent, market::NUMBER_OF_STONKS, ssh_client::SessionAuth, stonk::StonkClass,
     utils::AppResult,
 };
 use serde::{Deserialize, Serialize};
@@ -80,8 +80,12 @@ impl UserAgent {
         }
     }
 
-    pub fn formatted_cash(&self) -> f64 {
+    pub fn cash_dollars(&self) -> f64 {
         self.cash as f64 / 100.0
+    }
+
+    pub fn conditions(&self) -> &Vec<(usize, AgentCondition)> {
+        &self.conditions
     }
 }
 

@@ -1,11 +1,12 @@
 use crate::{
     agent::{AgentAction, DecisionAgent},
-    market::{Market, NUMBER_OF_STONKS},
+    market::Market,
     stonk::{Stonk, StonkClass},
 };
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
+use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 const A_GOOD_OFFER_PROBABILITY: f64 = 0.99994;
@@ -76,7 +77,7 @@ impl NightEvent {
                 "of prescience about".to_string(),
                 "something incoming...".to_string(),
             ],
-            Self::CharacterAssassination { username, .. } => {
+            Self::CharacterAssassination { username } => {
                 vec![
                     format!("That fucker {}", username),
                     "better pay attention".to_string(),

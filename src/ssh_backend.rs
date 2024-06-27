@@ -22,7 +22,7 @@ use ratatui::{
     style::{Color, Modifier},
 };
 
-use crate::{ssh_server::TerminalHandle, utils::AppResult};
+use crate::{ssh_client::TerminalHandle, utils::AppResult};
 
 /// A [`Backend`] implementation that uses [Crossterm] to render to the terminal.
 ///
