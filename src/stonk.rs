@@ -87,6 +87,7 @@ impl Stonk {
         if amount > self.available_amount() {
             return Err("Amount is greater than number of available shares.".into());
         }
+
         if let Some((_, old_amount)) = self
             .shareholders
             .iter_mut()
@@ -99,10 +100,16 @@ impl Stonk {
         self.sort_shareholders();
 
         info!("New shareholders: {:#?}", self.shareholders);
+
+        self.allocated_shares += amount;
         Ok(())
     }
 
     pub fn deallocate_shares(&mut self, username: &str, amount: u32) -> AppResult<()> {
+        if amount > self.allocated_shares {
+            return Err("Amount is greater than number of allocated shares.".into());
+        }
+
         if let Some((_, old_amount)) = self
             .shareholders
             .iter_mut()
@@ -118,6 +125,7 @@ impl Stonk {
         self.sort_shareholders();
         info!("New shareholders: {:#?}", self.shareholders);
 
+        self.allocated_shares -= amount;
         Ok(())
     }
 
