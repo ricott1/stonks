@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    agent::{AgentAction, AgentCondition, DecisionAgent},
+    agent::{AgentAction, AgentCondition, DecisionAgent, UserAgent, INITIAL_USER_CASH_CENTS},
     stonk::{Stonk, StonkCondition},
     utils::{load_stonks_data, AppResult},
 };
@@ -27,6 +27,8 @@ pub const HISTORICAL_SIZE: usize = DAY_LENGTH * 7 * 12;
 pub const NUMBER_OF_STONKS: usize = 8;
 
 const BRIBE_AMOUNT: u32 = 10_000 * 100;
+
+const GLOBAL_DRIFT_VOLATILITY: f64 = 1.0;
 
 #[derive(Debug, Clone, Copy, Display, EnumIter)]
 enum Season {
@@ -96,6 +98,12 @@ pub struct Market {
     pub stonks: [Stonk; NUMBER_OF_STONKS],
     pub last_tick: usize,
     pub phase: GamePhase,
+    #[serde(default)]
+    initial_total_market_cap: u64,
+    #[serde(default)]
+    target_total_market_cap: u64,
+    #[serde(default)]
+    pub portfolios: Vec<(String, u64)>,
 }
 
 impl Default for Market {
@@ -108,23 +116,95 @@ impl Market {
     pub fn new() -> Self {
         let stonks = load_stonks_data().expect("Failed to load stonks from data");
 
-        let m = Market {
+        let mut m = Market {
             stonks,
             last_tick: 0,
             phase: GamePhase::Day {
                 cycle: 0,
                 counter: 0,
             },
+            initial_total_market_cap: 0,
+            target_total_market_cap: 0,
+            portfolios: vec![],
         };
 
+        m.initial_total_market_cap = m.total_market_cap();
+        m.target_total_market_cap = m.initial_total_market_cap;
+
         debug!("Started Market with {} stonks!", m.stonks.len());
+        for stonk in m.stonks.iter() {
+            info!(
+                "Stonk availability: {} out of {} ({} bought)",
+                stonk.available_amount(),
+                stonk.number_of_shares,
+                stonk.allocated_shares
+            );
+        }
+
+        info!(
+            "Current total market cap: ${:.2}",
+            m.total_market_cap_dollars()
+        );
 
         m
     }
 
+    pub fn total_market_cap(&self) -> u64 {
+        self.stonks
+            .iter()
+            .map(|stonk| stonk.market_cap() as u64)
+            .sum::<u64>()
+    }
+
+    pub fn total_market_cap_dollars(&self) -> f64 {
+        self.total_market_cap() as f64 / 100.0
+    }
+
+    pub fn update_target_total_market_cap(&mut self, number_of_agents: usize) -> u64 {
+        self.target_total_market_cap = self.initial_total_market_cap
+            + number_of_agents as u64 * INITIAL_USER_CASH_CENTS as u64;
+        self.target_total_market_cap
+    }
+
+    pub fn update_portfolios(
+        &mut self,
+        agents: &HashMap<String, UserAgent>,
+    ) -> &Vec<(String, u64)> {
+        let mut portfolios = vec![];
+        for (username, agent) in agents.iter() {
+            let agent_stonk_value = agent
+                .owned_stonks()
+                .iter()
+                .enumerate()
+                .map(|(stonk_id, amount)| {
+                    let stonk = &self.stonks[stonk_id];
+                    stonk.price_per_share_in_cents as u64 * *amount as u64
+                })
+                .sum::<u64>();
+            if agent_stonk_value > 0 {
+                portfolios.push((username.clone(), agent_stonk_value));
+            }
+        }
+
+        portfolios.sort_by(|(_, a), (_, b)| b.cmp(a));
+
+        self.portfolios = portfolios;
+
+        &self.portfolios
+    }
+
     pub fn tick_day(&mut self, rng: &mut ChaCha8Rng) {
+        let current_market_cap = self.total_market_cap() as f64;
+        let mean = (self.target_total_market_cap as f64 - current_market_cap)
+            / current_market_cap.min(self.target_total_market_cap as f64);
+
         let global_drift = if self.last_tick % DAY_LENGTH == 0 {
-            Some(rng.gen_range(-0.01..0.01))
+            let drift = mean + rng.gen_range(-GLOBAL_DRIFT_VOLATILITY..GLOBAL_DRIFT_VOLATILITY);
+            info!(
+                "Global drift: current cap {}, target cap {}, global drift {}",
+                current_market_cap, self.target_total_market_cap, drift
+            );
+            Some(drift)
         } else {
             None
         };

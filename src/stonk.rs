@@ -41,7 +41,7 @@ pub struct Stonk {
     drift_volatility: f64, // Influences the rate of change of drift, must be positive
     volatility: f64, // Cauchy dist variance, changes the variance of the price percentage variation, must be positive
     pub shock_probability: f64, // probability to select the Cauchy dist rather than the Guassian one
-    starting_price: u32,
+    pub starting_price: u32,
     pub historical_prices: Vec<u32>,
     conditions: Vec<(usize, StonkCondition)>,
 }

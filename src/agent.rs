@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use strum::Display;
 use tracing::info;
 
-const INITIAL_USER_CASH_CENTS: u32 = 10000 * 100;
+pub const INITIAL_USER_CASH_CENTS: u32 = 10_000 * 100;
 
 #[derive(Debug, Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum AgentAction {

@@ -58,7 +58,7 @@ impl AppServer {
             save_agents(&agents)?;
             agents
         } else {
-            load_agents().unwrap_or_default()
+            load_agents()?
         };
         info!("Loaded {} agents from store", agents.len());
 
@@ -77,16 +77,8 @@ impl AppServer {
             save_market(&m)?;
             m
         } else {
-            let m = load_market().unwrap_or_default();
+            let m = load_market()?;
             info!("Loading market. Starting back from {:#?}", m.phase);
-            for stonk in m.stonks.iter() {
-                info!(
-                    "Stonk availability: {} out of {} ({} bought)",
-                    stonk.available_amount(),
-                    stonk.number_of_shares,
-                    stonk.allocated_shares
-                );
-            }
 
             m
         };
@@ -120,6 +112,8 @@ impl AppServer {
                 if last_market_tick.elapsed().expect("Time flows backwards")
                     > Duration::from_millis(MARKET_TICK_INTERVAL_MILLIS)
                 {
+                    market.update_target_total_market_cap(agents.len());
+                    market.update_portfolios(&agents);
                     market.tick();
                     last_market_tick = SystemTime::now();
                 }

@@ -20,9 +20,9 @@
     {
         "id": 1,
         "class": "Technology",
-        "name": "ANVD",
-        "short_name": "AntVidia",
-        "description": "Pioneers in self-driving tech that'll get you where you need to go—eventually. We dream of a world where cars drive themselves and humans are just unnecessary distractions.",
+        "name": "AntVidia",
+        "short_name": "ANVD",
+        "description": "Selling chips for next generation quantum AI which will definitely solve all our problems this time.",
         "price_per_share_in_cents": 10000,
         "number_of_shares": 4500,
         "allocated_shares": 0,
