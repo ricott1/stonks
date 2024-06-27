@@ -189,7 +189,7 @@ impl AppServer {
 
                     match market.phase {
                         GamePhase::Day { .. } => {
-                            client.clear_render_counter();
+                            client.clear_ui_options();
                             agent.set_available_night_events(vec![]);
                             if let Some(_) = agent.selected_action() {
                                 market
@@ -232,7 +232,6 @@ impl AppServer {
                                     .collect::<Vec<NightEvent>>();
 
                                 agent.set_available_night_events(events);
-                                client.clear_selected_event_index();
                             }
                             client.tick_render_counter();
                         }
