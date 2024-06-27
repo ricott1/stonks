@@ -313,7 +313,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
                 0.0
             };
 
-            avg_today_variation += today_variation;
+            avg_today_variation += today_variation * stonk.number_of_shares as f64;
 
             let today_style = today_variation.style();
 
@@ -325,12 +325,12 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
                 0.0
             };
 
-            avg_max_variation += max_variation;
+            avg_max_variation += max_variation * stonk.number_of_shares as f64;
 
             let max_style = (max_variation / 5.0).style();
 
             let agent_share = stonk.to_stake(agent.owned_stonks()[stonk.id]);
-            avg_agent_share += agent_share;
+            avg_agent_share += agent_share * stonk.number_of_shares as f64;
             let agent_style = agent_share.ustyle();
 
             let agent_stonk_value = agent.owned_stonks()[stonk.id] as f64
@@ -356,8 +356,10 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
 
             let market_cap = stonk.market_cap_dollars();
             total_market_cap += market_cap;
-            let market_cap_text = if market_cap > 10_000.0 {
-                format!("\n${:.0}k", market_cap / 1000.0)
+            let market_cap_text = if market_cap > 1_000_000.0 {
+                format!("\n${:.3}M", market_cap / 1_000_000.0)
+            } else if market_cap > 1_000.0 {
+                format!("\n${:.3}k", market_cap / 1_000.0)
             } else {
                 format!("\n${}", market_cap as u32)
             };
@@ -373,21 +375,27 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
                 Cell::new(format!("\n{:.2}%", agent_share)).style(agent_style),
                 Cell::new(format!("\n${:.0}", agent_stonk_value)).style(agent_stonk_style),
                 Cell::new(top_shareholders),
-                Cell::new(market_cap_text).style(las_minute_avg_price_style),
+                Cell::new(market_cap_text).style(max_style),
             ])
             .style(Style::new().fg(colors.row_fg).bg(color))
             .height(3)
         })
         .collect::<Vec<Row>>();
 
-    avg_today_variation /= market.stonks.len() as f64;
-    avg_max_variation /= market.stonks.len() as f64;
-    avg_agent_share /= market.stonks.len() as f64;
+    let total_number_of_shares = market
+        .stonks
+        .iter()
+        .map(|stonk| stonk.number_of_shares as u64)
+        .sum::<u64>() as f64;
 
-    let total_market_cap_text = if total_market_cap > 10_000_000.0 {
-        format!("\n${:.0}M", total_market_cap / 1_000_000.0)
-    } else if total_market_cap > 10_000.0 {
-        format!("\n${:.0}k", total_market_cap / 1_000.0)
+    avg_today_variation /= total_number_of_shares;
+    avg_max_variation /= total_number_of_shares;
+    avg_agent_share /= total_number_of_shares;
+
+    let total_market_cap_text = if total_market_cap > 1_000_000.0 {
+        format!("\n${:.3}M", total_market_cap / 1_000_000.0)
+    } else if total_market_cap > 1_000.0 {
+        format!("\n${:.3}k", total_market_cap / 1_000.0)
     } else {
         format!("\n${}", total_market_cap as u32)
     };

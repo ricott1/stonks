@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum_macros::EnumIter;
 
-const A_GOOD_OFFER_PROBABILITY: f64 = 0.99994;
+const A_GOOD_OFFER_PROBABILITY: f64 = 0.4;
 
 #[derive(Debug, Clone, EnumIter, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum NightEvent {
