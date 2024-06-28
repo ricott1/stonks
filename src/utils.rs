@@ -159,7 +159,7 @@ pub fn load_keys() -> AppResult<ed25519_dalek::SigningKey> {
     Ok(ed25519_dalek::SigningKey::from_bytes(&buf))
 }
 
-pub fn convert_data_to_key_event(data: &[u8]) -> Option<KeyEvent> {
+fn convert_data_to_key_event(data: &[u8]) -> Option<KeyEvent> {
     debug!("convert_data_to_key_event: data {:?}", data);
     let (code, modifiers) = if data.len() == 1 {
         match data[0] {
@@ -175,6 +175,7 @@ pub fn convert_data_to_key_event(data: &[u8]) -> Option<KeyEvent> {
             //     KeyModifiers::CONTROL,
             // ),
             27 => (KeyCode::Esc, KeyModifiers::empty()),
+            x if x >= 32 && x <= 64 => (KeyCode::Char(x as char), KeyModifiers::empty()),
             x if x >= 65 && x <= 90 => (
                 KeyCode::Char((x as char).to_ascii_lowercase()),
                 KeyModifiers::SHIFT,
@@ -199,7 +200,7 @@ pub fn convert_data_to_key_event(data: &[u8]) -> Option<KeyEvent> {
     Some(event)
 }
 
-pub fn decode_sgr_mouse_input(ansi_code: Vec<u8>) -> AppResult<(u8, u16, u16)> {
+fn decode_sgr_mouse_input(ansi_code: Vec<u8>) -> AppResult<(u8, u16, u16)> {
     // Convert u8 vector to a String
     let ansi_str = String::from_utf8(ansi_code.clone()).map_err(|_| "Invalid UTF-8 sequence")?;
 
@@ -241,7 +242,7 @@ pub fn decode_sgr_mouse_input(ansi_code: Vec<u8>) -> AppResult<(u8, u16, u16)> {
     Ok((cb, cx, cy))
 }
 
-pub fn convert_data_to_mouse_event(data: &[u8]) -> Option<MouseEvent> {
+fn convert_data_to_mouse_event(data: &[u8]) -> Option<MouseEvent> {
     let (cb, column, row) = decode_sgr_mouse_input(data.to_vec()).ok()?;
     let kind = match cb {
         0 => MouseEventKind::Down(MouseButton::Left),

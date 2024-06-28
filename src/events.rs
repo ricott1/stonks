@@ -11,6 +11,8 @@ use strum_macros::EnumIter;
 const A_GOOD_OFFER_PROBABILITY: f64 = 0.4;
 const LUCKY_NIGHT_PROBABILITY: f64 = 0.25;
 pub const CHARACTER_ASSASSINATION_COST: u32 = 5_000 * 100;
+pub const MARKET_CRASH_COST: u32 = 50_000 * 100;
+const MARKET_CRASH_PREREQUISITE: u32 = 100_000 * 100;
 
 #[derive(Debug, Clone, EnumIter, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum NightEvent {
@@ -100,10 +102,22 @@ impl NightEvent {
             ],
         };
 
-        description.push("".to_string());
-        description.push("Unlock Condition:".to_string());
-        for l in self.unlock_condition_description().iter() {
-            description.push(l.clone());
+        let unlock_description = self.unlock_condition_description();
+        if unlock_description.len() > 0 {
+            description.push("".to_string());
+            description.push("Unlock Condition:".to_string());
+            for l in unlock_description.iter() {
+                description.push(l.clone());
+            }
+        }
+
+        let cost_description = self.cost_description();
+        if cost_description.len() > 0 {
+            description.push("".to_string());
+            description.push("Cost:".to_string());
+            for l in cost_description.iter() {
+                description.push(l.clone());
+            }
         }
 
         description
@@ -167,7 +181,7 @@ impl NightEvent {
                     / tech_stonks.len() as f64
                     >= 1.0
             }),
-            Self::MarketCrash => Box::new(|agent, _| agent.cash() >= 100_000 * 100),
+            Self::MarketCrash => Box::new(|agent, _| agent.cash() >= MARKET_CRASH_PREREQUISITE),
             Self::UltraVision => Box::new(|agent, market| {
                 let riccardino_id = 3;
                 let riccardino = &market.stonks[riccardino_id];
@@ -205,6 +219,18 @@ impl NightEvent {
         }
     }
 
+    fn cost_description(&self) -> Vec<String> {
+        match self {
+            Self::MarketCrash => {
+                vec![format!("${}", MARKET_CRASH_COST / 100)]
+            }
+            Self::CharacterAssassination { .. } => {
+                vec![format!("${}", CHARACTER_ASSASSINATION_COST / 100)]
+            }
+            _ => vec![],
+        }
+    }
+
     fn unlock_condition_description(&self) -> Vec<String> {
         match self {
             Self::War => vec![
@@ -223,13 +249,13 @@ impl NightEvent {
                 "Average share in".to_string(),
                 "Technology stonks >= 1%".to_string(),
             ],
-            Self::MarketCrash => vec!["Total cash >= $100000".to_string()],
+            Self::MarketCrash => vec![format!("Cash >= ${MARKET_CRASH_PREREQUISITE}")],
             Self::UltraVision => vec!["Riccardino share >= 10%".to_string()],
             Self::CharacterAssassination { username, .. } => vec![
                 format!("{username} took a special offer"),
                 "in the past and got too".to_string(),
                 "greedy now;".to_string(),
-                format!("Cash >= {}.", CHARACTER_ASSASSINATION_COST),
+                format!("Cash >= ${}", CHARACTER_ASSASSINATION_COST / 100),
             ],
             Self::AGoodOffer => vec![
                 "Random chance,".to_string(),

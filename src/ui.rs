@@ -791,9 +791,10 @@ fn render_header(
                 let amount = agent.owned_stonks()[stonk_id];
                 let stonk = &market.stonks[stonk_id];
                 format!(
-                    "Owned shares {} ({:.02}%) ",
+                    "Owned shares {} ({:.02}%) ${}",
                     amount,
-                    stonk.to_stake(agent.owned_stonks()[stonk.id]) * 100.0
+                    stonk.to_stake(agent.owned_stonks()[stonk.id]) * 100.0,
+                    format_value(stonk.price_per_share_in_cents as f64 / 100.0 * amount as f64)
                 )
             } else {
                 format!(

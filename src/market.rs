@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     agent::{AgentAction, AgentCondition, DecisionAgent, UserAgent, INITIAL_USER_CASH_CENTS},
-    events::CHARACTER_ASSASSINATION_COST,
+    events::{CHARACTER_ASSASSINATION_COST, MARKET_CRASH_COST},
     stonk::{Stonk, StonkCondition},
     utils::{load_stonks_data, AppResult},
 };
@@ -13,7 +13,7 @@ use strum::{Display, EnumIter, IntoEnumIterator};
 use tracing::{debug, info};
 
 const DAY_STARTING_HOUR: usize = 6;
-const DAY_LENGTH_HOURS: usize = 16;
+const DAY_LENGTH_HOURS: usize = 18;
 const NIGHT_LENGTH_HOURS: usize = 24 - DAY_LENGTH_HOURS;
 
 const TICKS_PER_HOUR: usize = 4;
@@ -24,7 +24,7 @@ pub const DAY_LENGTH: usize = TICKS_PER_HOUR * DAY_LENGTH_HOURS; // DAY_LENGTH =
 pub const NIGHT_LENGTH: usize = TICKS_PER_HOUR * NIGHT_LENGTH_HOURS; // NIGHT_LENGTH = 8 hours
 
 // We keep record of the last 12 weeks
-pub const HISTORICAL_SIZE: usize = DAY_LENGTH * 7 * 12;
+pub const HISTORICAL_SIZE: usize = DAY_LENGTH * 30 * 12;
 pub const NUMBER_OF_STONKS: usize = 8;
 
 const BRIBE_AMOUNT: u32 = 10_000 * 100;
@@ -349,6 +349,7 @@ impl Market {
                             self.last_tick + DAY_LENGTH,
                         )
                     }
+                    agent.sub_cash(MARKET_CRASH_COST)?;
                 }
                 AgentAction::AddCash { amount } => {
                     agent.add_cash(*amount)?;

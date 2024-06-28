@@ -128,27 +128,36 @@ impl Client {
         agent: &mut UserAgent,
     ) -> AppResult<()> {
         match key_event.code {
-            crossterm::event::KeyCode::Enter | crossterm::event::KeyCode::Backspace => {
-                match market.phase {
-                    GamePhase::Day { .. } => {
-                        if let Some(_) = self.ui_options.focus_on_stonk {
-                            self.ui_options.reset();
-                        } else {
-                            self.ui_options.select_stonk();
-                        }
+            crossterm::event::KeyCode::Enter => match market.phase {
+                GamePhase::Day { .. } => {
+                    if let Some(_) = self.ui_options.focus_on_stonk {
+                        self.ui_options.reset();
+                    } else {
+                        self.ui_options.select_stonk();
                     }
-                    GamePhase::Night { .. } => {
-                        if agent.selected_action().is_none() {
-                            let idx = self.ui_options.selected_event_card_index;
-                            if idx < agent.available_night_events().len() {
-                                let event = agent.available_night_events()[idx].clone();
-                                let action = event.action();
-                                agent.select_action(action);
-                            }
+                }
+                GamePhase::Night { .. } => {
+                    if agent.selected_action().is_none() {
+                        let idx = self.ui_options.selected_event_card_index;
+                        if idx < agent.available_night_events().len() {
+                            let event = agent.available_night_events()[idx].clone();
+                            let action = event.action();
+                            agent.select_action(action);
                         }
                     }
                 }
-            }
+            },
+
+            crossterm::event::KeyCode::Backspace => match market.phase {
+                GamePhase::Day { .. } => {
+                    self.ui_options.reset();
+                }
+                GamePhase::Night { .. } => {
+                    if agent.selected_action().is_some() {
+                        agent.clear_action();
+                    }
+                }
+            },
 
             KeyCode::Char('b') => {
                 let stonk_id = if let Some(stonk_id) = self.ui_options.focus_on_stonk {
