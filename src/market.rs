@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     agent::{AgentAction, AgentCondition, DecisionAgent, UserAgent, INITIAL_USER_CASH_CENTS},
-    events::{CHARACTER_ASSASSINATION_COST, MARKET_CRASH_COST},
+    events::{CHARACTER_ASSASSINATION_COST, DIVIDEND_PAYOUT, MARKET_CRASH_COST},
     stonk::{Stonk, StonkCondition},
     utils::{load_stonks_data, AppResult},
 };
@@ -142,7 +142,7 @@ impl Market {
         }
 
         info!(
-            "Current total market cap: ${:.2}",
+            "Current total market cap: ${:.02}",
             m.total_market_cap_dollars()
         );
 
@@ -152,7 +152,7 @@ impl Market {
     pub fn total_market_cap(&self) -> u64 {
         self.stonks
             .iter()
-            .map(|stonk| stonk.market_cap() as u64)
+            .map(|stonk| stonk.market_cap_cents() as u64)
             .sum::<u64>()
     }
 
@@ -178,7 +178,7 @@ impl Market {
                 .enumerate()
                 .map(|(stonk_id, amount)| {
                     let stonk = &self.stonks[stonk_id];
-                    stonk.base_price() as u64 * *amount as u64
+                    stonk.current_unit_price_cents() as u64 * *amount as u64
                 })
                 .sum::<u64>();
             if agent_stonk_value > 0 {
@@ -284,11 +284,12 @@ impl Market {
                     if max_amount < *amount {
                         return Err("Not enough shares available".into());
                     }
-                    let cost = stonk.buy_price() * amount;
-                    agent.sub_cash(cost)?;
-                    agent.add_stonk(*stonk_id, *amount)?;
 
-                    stonk.allocate_shares(agent.username(), *amount)?;
+                    let cost = stonk.buy_price_cents(*amount);
+                    agent.sub_cash(cost)?;
+
+                    agent.add_stonk(*stonk_id, *amount)?;
+                    stonk.allocate_shares_to_agent(agent.username(), *amount)?;
 
                     info!(
                         "{} stonks bought, there are now {} available ({} total bought)",
@@ -307,10 +308,11 @@ impl Market {
                 }
                 AgentAction::Sell { stonk_id, amount } => {
                     let stonk = &mut self.stonks[*stonk_id];
-                    let cost = stonk.sell_price() * amount;
-                    agent.sub_stonk(*stonk_id, *amount)?;
+
+                    let cost = stonk.sell_price_cents(*amount);
                     agent.add_cash(cost)?;
-                    stonk.deallocate_shares(agent.username(), *amount)?;
+                    agent.sub_stonk(*stonk_id, *amount)?;
+                    stonk.deallocate_shares_to_agent(agent.username(), *amount)?;
 
                     info!(
                         "{} stonks sold, there are now {} available ({} total bought)",
@@ -390,6 +392,29 @@ impl Market {
                     }
                 }
                 AgentAction::AssassinationVictim => {}
+                AgentAction::GetDividends { stonk_id } => {
+                    let stonk = &self.stonks[*stonk_id];
+                    let yesterday_opening_price =
+                        stonk.historical_prices[stonk.historical_prices.len() - DAY_LENGTH];
+                    let yesterday_closing_price =
+                        stonk.historical_prices[stonk.historical_prices.len() - 1];
+
+                    if yesterday_opening_price >= yesterday_closing_price
+                        || yesterday_opening_price == 0
+                    {
+                        panic!("This should have been checked before")
+                    }
+
+                    let yesterday_gain = (yesterday_closing_price - yesterday_opening_price) as f64
+                        / yesterday_opening_price as f64;
+
+                    let dividend = (agent.owned_stonks()[*stonk_id] as f64
+                        * stonk.current_unit_price_cents() as f64
+                        * DIVIDEND_PAYOUT
+                        * yesterday_gain) as u32;
+
+                    agent.add_cash(dividend)?;
+                }
             }
             agent.insert_past_selected_actions(action.clone(), self.last_tick);
         }

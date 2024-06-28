@@ -21,6 +21,7 @@ pub enum AgentAction {
     AddCash { amount: u32 },
     AcceptBribe,
     AssassinationVictim, // This action is actually used to signal that the user got CharacterAssassinated
+    GetDividends { stonk_id: usize },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

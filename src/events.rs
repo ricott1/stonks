@@ -1,7 +1,8 @@
 use crate::{
     agent::{AgentAction, DecisionAgent},
-    market::Market,
+    market::{Market, DAY_LENGTH},
     stonk::{Stonk, StonkClass},
+    utils::format_value,
 };
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -13,6 +14,7 @@ const LUCKY_NIGHT_PROBABILITY: f64 = 0.25;
 pub const CHARACTER_ASSASSINATION_COST: u32 = 5_000 * 100;
 pub const MARKET_CRASH_COST: u32 = 50_000 * 100;
 const MARKET_CRASH_PREREQUISITE: u32 = 100_000 * 100;
+pub const DIVIDEND_PAYOUT: f64 = 0.01;
 
 #[derive(Debug, Clone, EnumIter, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum NightEvent {
@@ -25,6 +27,7 @@ pub enum NightEvent {
     CharacterAssassination { username: String },
     AGoodOffer,
     LuckyNight,
+    ReceiveDividends { stonk_id: usize },
 }
 
 impl Display for NightEvent {
@@ -39,12 +42,13 @@ impl Display for NightEvent {
             Self::CharacterAssassination { .. } => write!(f, "Character assassination"),
             Self::AGoodOffer => write!(f, "A good offer"),
             Self::LuckyNight => write!(f, "Lucky night"),
+            Self::ReceiveDividends { .. } => write!(f, "Receive dividends"),
         }
     }
 }
 
 impl NightEvent {
-    pub fn description(&self) -> Vec<String> {
+    pub fn description(&self, agent: &dyn DecisionAgent, market: &Market) -> Vec<String> {
         let mut description = match self {
             Self::War => vec![
                 "It's war time!".to_string(),
@@ -100,6 +104,33 @@ impl NightEvent {
                 "on the ground.".to_string(),
                 "Che culo!".to_string(),
             ],
+            Self::ReceiveDividends { stonk_id } => {
+                let stonk = &market.stonks[*stonk_id];
+
+                let yesterday_opening_price =
+                    stonk.historical_prices[stonk.historical_prices.len() - DAY_LENGTH];
+                let yesterday_closing_price =
+                    stonk.historical_prices[stonk.historical_prices.len() - 1];
+
+                if yesterday_opening_price >= yesterday_closing_price
+                    || yesterday_opening_price == 0
+                {
+                    return vec!["No divindend, this shouldn't happen".to_string()];
+                }
+
+                let yesterday_gain = (yesterday_closing_price - yesterday_opening_price) as f64
+                    / yesterday_opening_price as f64;
+
+                let dividend = agent.owned_stonks()[*stonk_id] as f64
+                    * stonk.current_unit_price_dollars()
+                    * DIVIDEND_PAYOUT
+                    * yesterday_gain;
+                vec![
+                    format!("{} is paying", stonk.name),
+                    format!("dividends, you will get",),
+                    format!("${}.", format_value(dividend)),
+                ]
+            }
         };
 
         let unlock_description = self.unlock_condition_description();
@@ -216,6 +247,35 @@ impl NightEvent {
                     rng.gen_bool(LUCKY_NIGHT_PROBABILITY)
                 }
             }),
+            Self::ReceiveDividends { stonk_id } => {
+                let stonk_id = stonk_id.clone();
+                Box::new(move |agent, market| {
+                    let stonk = &market.stonks[stonk_id];
+                    let yesterday_opening_price =
+                        stonk.historical_prices[stonk.historical_prices.len() - DAY_LENGTH];
+                    let yesterday_closing_price =
+                        stonk.historical_prices[stonk.historical_prices.len() - 1];
+
+                    if yesterday_opening_price >= yesterday_closing_price
+                        || yesterday_opening_price == 0
+                    {
+                        return false;
+                    }
+
+                    let yesterday_gain = (yesterday_closing_price - yesterday_opening_price) as f64
+                        / yesterday_opening_price as f64;
+
+                    let dividend = agent.owned_stonks()[stonk_id] as f64
+                        * stonk.current_unit_price_dollars()
+                        * DIVIDEND_PAYOUT
+                        * yesterday_gain;
+
+                    dividend > 0.0 && {
+                        let rng = &mut rand::thread_rng();
+                        rng.gen_bool(stonk.dividend_probability)
+                    }
+                })
+            }
         }
     }
 
@@ -262,6 +322,10 @@ impl NightEvent {
                 "happens only once".to_string(),
             ],
             Self::LuckyNight => vec!["Random chance".to_string()],
+            Self::ReceiveDividends { .. } => vec![
+                "Stonk price increased".to_string(),
+                "and random chance".to_string(),
+            ],
         }
     }
 
@@ -286,6 +350,9 @@ impl NightEvent {
             },
             Self::AGoodOffer => AgentAction::AcceptBribe,
             Self::LuckyNight => AgentAction::AddCash { amount: 100 * 100 },
+            Self::ReceiveDividends { stonk_id } => AgentAction::GetDividends {
+                stonk_id: *stonk_id,
+            },
         }
     }
 }

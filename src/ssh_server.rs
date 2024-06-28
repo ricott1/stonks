@@ -183,7 +183,7 @@ impl AppServer {
 
                     match market.phase {
                         GamePhase::Day { .. } => {
-                            client.clear_ui_options();
+                            client.clear_render_counter();
                             agent.set_available_night_events(vec![]);
                             if let Some(_) = agent.selected_action() {
                                 market
@@ -205,6 +205,7 @@ impl AppServer {
                                             NightEvent::CharacterAssassination { .. } => {
                                                 return false
                                             }
+                                            NightEvent::ReceiveDividends { .. } => return false,
                                             _ => {}
                                         };
                                         e.unlock_condition()(agent, &market)
@@ -212,6 +213,14 @@ impl AppServer {
                                     .collect::<Vec<NightEvent>>();
 
                                 for event in character_assassination_events.iter() {
+                                    if event.unlock_condition()(agent, &market) == true {
+                                        events.push(event.clone());
+                                    }
+                                }
+
+                                // Add ReceiveDividends events for each stonk
+                                for stonk in market.stonks.iter() {
+                                    let event = NightEvent::ReceiveDividends { stonk_id: stonk.id };
                                     if event.unlock_condition()(agent, &market) == true {
                                         events.push(event.clone());
                                     }
@@ -226,6 +235,7 @@ impl AppServer {
                                     .collect::<Vec<NightEvent>>();
 
                                 agent.clear_action();
+                                client.clear_event_card();
                                 agent.set_available_night_events(events);
                             }
                             client.tick_render_counter();
@@ -265,7 +275,7 @@ impl AppServer {
                         if !condition {
                             for (stonk_id, &amount) in agent.owned_stonks().iter().enumerate() {
                                 let stonk = &mut market.stonks[stonk_id];
-                                if let Err(e) = stonk.deallocate_shares(agent.username(), amount) {
+                                if let Err(e) = stonk.deallocate_shares_to_agent(agent.username(), amount) {
                                     error!("Failed to deallocate share: {e}. Stonk id {stonk_id}, username {}, amount {amount}", agent.username());
                                     continue;
                                 }
@@ -516,7 +526,7 @@ impl Handler for AppServer {
         info!("Handling channel_close for {}", self.session_auth.username);
         let mut clients = self.clients.lock().await;
         clients.remove(&self.session_auth.username);
-        session.disconnect(Disconnect::ByApplication, "Game quit", "");
+        // session.disconnect(Disconnect::ByApplication, "Game quit", "");
         session.close(channel);
 
         Ok(())
@@ -531,8 +541,8 @@ impl Handler for AppServer {
         info!("Handling channel_eof for {}", self.session_auth.username);
         let mut clients = self.clients.lock().await;
         clients.remove(&self.session_auth.username);
-        session.disconnect(Disconnect::ByApplication, "Game quit", "");
-        session.close(channel);
+        // session.disconnect(Disconnect::ByApplication, "Game quit", "");
+        session.eof(channel);
 
         Ok(())
     }

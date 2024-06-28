@@ -15,7 +15,8 @@
         "shock_probability": 0.12,
         "starting_price": 9800,
         "historical_prices": [],
-        "conditions": []
+        "conditions": [],
+        "dividend_probability": 0.5
     },
     {
         "id": 1,
@@ -33,7 +34,8 @@
         "shock_probability": 0.0125,
         "starting_price": 10000,
         "historical_prices": [],
-        "conditions": []
+        "conditions": [],
+        "dividend_probability": 0.25
     },
     {
         "id": 2,
@@ -51,7 +53,8 @@
         "shock_probability": 0.01,
         "starting_price": 8000,
         "historical_prices": [],
-        "conditions": []
+        "conditions": [],
+        "dividend_probability": 0.5
     },
     {
         "id": 3,
@@ -69,7 +72,8 @@
         "shock_probability": 0.07,
         "starting_price": 9000,
         "historical_prices": [],
-        "conditions": []
+        "conditions": [],
+        "dividend_probability": 0.5
     },
     {
         "id": 4,
@@ -87,7 +91,8 @@
         "shock_probability": 0.1,
         "starting_price": 60000,
         "historical_prices": [],
-        "conditions": []
+        "conditions": [],
+        "dividend_probability": 0.65
     },
     {
         "id": 5,
@@ -105,7 +110,8 @@
         "shock_probability": 0.005,
         "starting_price": 12000,
         "historical_prices": [],
-        "conditions": []
+        "conditions": [],
+        "dividend_probability": 0.65
     },
     {
         "id": 6,
@@ -123,7 +129,8 @@
         "shock_probability": 0.15,
         "starting_price": 80000,
         "historical_prices": [],
-        "conditions": []
+        "conditions": [],
+        "dividend_probability": 0.4
     },
     {
         "id": 7,
@@ -135,12 +142,13 @@
         "number_of_shares": 100000,
         "allocated_shares": 0,
         "shareholders": [],
-        "drift": 0.001,
+        "drift": -0.001,
         "drift_volatility": 0.0005,
-        "volatility": 0.01,
+        "volatility": 0.004,
         "shock_probability": 0.05,
         "starting_price": 12000,
         "historical_prices": [],
-        "conditions": []
+        "conditions": [],
+        "dividend_probability": 0.25
     }
 ]

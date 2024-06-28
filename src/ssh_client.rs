@@ -116,7 +116,11 @@ impl Client {
         self.ui_options.render_counter += 1;
     }
 
-    pub fn clear_ui_options(&mut self) {
+    pub fn clear_render_counter(&mut self) {
+        self.ui_options.render_counter = 0;
+    }
+
+    pub fn clear_event_card(&mut self) {
         self.ui_options.render_counter = 0;
         self.ui_options.selected_event_card_index = 0;
     }
@@ -167,8 +171,9 @@ impl Client {
                 };
 
                 let stonk = &market.stonks[stonk_id];
-                let max_buy_amount = if stonk.buy_price() > 0 {
-                    (agent.cash() / stonk.buy_price()).min(stonk.available_amount())
+                let price = stonk.buy_price_cents(1);
+                let max_buy_amount = if price > 0 {
+                    (agent.cash() / price).min(stonk.available_amount())
                 } else {
                     0
                 };
@@ -189,8 +194,9 @@ impl Client {
                     self.ui_options.selected_stonk_index
                 };
                 let stonk = &market.stonks[stonk_id];
-                let max_buy_amount = if stonk.buy_price() > 0 {
-                    (agent.cash() / stonk.buy_price()).min(stonk.available_amount())
+                let price = stonk.buy_price_cents(1);
+                let max_buy_amount = if price > 0 {
+                    (agent.cash() / price).min(stonk.available_amount())
                 } else {
                     0
                 };

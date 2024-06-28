@@ -6,7 +6,7 @@ use tracing::{debug, info};
 
 const MIN_DRIFT: f64 = -0.2;
 const MAX_DRIFT: f64 = -MIN_DRIFT;
-const MODIFIED_PRICE_DELTA: f64 = 10.0;
+const MODIFIED_PRICE_DELTA: u32 = 10;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum StonkClass {
@@ -45,6 +45,8 @@ pub struct Stonk {
     pub starting_price: u32,
     pub historical_prices: Vec<u32>,
     conditions: Vec<(usize, StonkCondition)>,
+    #[serde(default)]
+    pub dividend_probability: f64,
 }
 
 impl Stonk {
@@ -61,23 +63,26 @@ impl Stonk {
         let share = self.to_stake(amount) * 100.0;
         if share >= 5.0 {
             format!(
-                "Price ${:.2} - Drift {:.3} - Volatility {:.3}",
+                "Price ${:.02} - Drift {:.03} - Volatility {:.03}",
                 self.price_per_share_in_cents as f64 / 100.0,
                 self.drift,
                 self.volatility
             )
         } else if share >= 1.0 {
             format!(
-                "Price ${:.2} - Drift {:.3}",
+                "Price ${:.02} - Drift {:.03}",
                 self.price_per_share_in_cents as f64 / 100.0,
                 self.drift
             )
         } else {
-            format!("Price ${:.2}", self.price_per_share_in_cents as f64 / 100.0)
+            format!(
+                "Price ${:.02}",
+                self.price_per_share_in_cents as f64 / 100.0
+            )
         }
     }
 
-    pub fn market_cap(&self) -> u64 {
+    pub fn market_cap_cents(&self) -> u64 {
         self.price_per_share_in_cents as u64 * self.number_of_shares as u64
     }
 
@@ -85,7 +90,7 @@ impl Stonk {
         self.number_of_shares - self.allocated_shares
     }
 
-    pub fn allocate_shares(&mut self, username: &str, amount: u32) -> AppResult<()> {
+    fn allocate_shares(&mut self, amount: u32) -> AppResult<()> {
         if amount > self.available_amount() {
             return Err("Amount is greater than number of available shares.".into());
         }
@@ -93,6 +98,13 @@ impl Stonk {
         if amount == 0 {
             return Ok(());
         }
+
+        self.allocated_shares += amount;
+        Ok(())
+    }
+
+    pub fn allocate_shares_to_agent(&mut self, username: &str, amount: u32) -> AppResult<()> {
+        self.allocate_shares(amount)?;
 
         if let Some((_, old_amount)) = self
             .shareholders
@@ -107,11 +119,10 @@ impl Stonk {
 
         info!("New shareholders: {:#?}", self.shareholders);
 
-        self.allocated_shares += amount;
         Ok(())
     }
 
-    pub fn deallocate_shares(&mut self, username: &str, amount: u32) -> AppResult<()> {
+    fn deallocate_shares(&mut self, amount: u32) -> AppResult<()> {
         if amount > self.allocated_shares {
             return Err("Amount is greater than number of allocated shares.".into());
         }
@@ -119,6 +130,13 @@ impl Stonk {
         if amount == 0 {
             return Ok(());
         }
+
+        self.allocated_shares -= amount;
+        Ok(())
+    }
+
+    pub fn deallocate_shares_to_agent(&mut self, username: &str, amount: u32) -> AppResult<()> {
+        self.deallocate_shares(amount)?;
 
         if let Some((_, old_amount)) = self
             .shareholders
@@ -135,7 +153,6 @@ impl Stonk {
         self.sort_shareholders();
         info!("New shareholders: {:#?}", self.shareholders);
 
-        self.allocated_shares -= amount;
         Ok(())
     }
 
@@ -192,7 +209,7 @@ impl Stonk {
         self.historical_prices.push(self.price_per_share_in_cents);
 
         debug!(
-            "{:15} μ={:+.5} σ={:.5} Δ={:+.5} shock={:.3} price={}\n{:?}",
+            "{:15} μ={:+.5} σ={:.5} Δ={:+.5} shock={:.03} price={}\n{:?}",
             self.name,
             self.drift,
             self.volatility,
@@ -241,34 +258,57 @@ impl Stonk {
         }
     }
 
-    pub fn base_price(&self) -> u32 {
-        let modifier = ((self.number_of_shares as f64 + MODIFIED_PRICE_DELTA)
-            / (self.available_amount() as f64 + MODIFIED_PRICE_DELTA))
-            .powf(0.25);
-        (self.price_per_share_in_cents as f64 * modifier) as u32
+    fn base_price(&self, amount: u32) -> u32 {
+        let mut price = 0;
+        for l in 0..amount {
+            let current_available_amount = self.available_amount() - l;
+            let modifier = ((self.number_of_shares + MODIFIED_PRICE_DELTA) as f64
+                / (current_available_amount + MODIFIED_PRICE_DELTA) as f64)
+                .powf(0.5);
+
+            price += (self.price_per_share_in_cents as f64 * modifier) as u32
+        }
+
+        price
     }
 
-    pub fn buy_price(&self) -> u32 {
-        (self.base_price() as f64 * (1.0 + self.volatility)) as u32
+    fn buy_price(&self, amount: u32) -> u32 {
+        (self.base_price(amount) as f64 * (1.0 + self.volatility)) as u32
     }
 
-    pub fn sell_price(&self) -> u32 {
-        (self.base_price() as f64 * (1.0 - self.volatility)) as u32
+    fn sell_price(&self, amount: u32) -> u32 {
+        (self.base_price(amount) as f64 * (1.0 - self.volatility)) as u32
     }
 
-    pub fn base_price_dollars(&self) -> f64 {
-        self.base_price() as f64 / 100.0
+    fn current_price(&self) -> u32 {
+        self.base_price(1)
     }
 
-    pub fn buy_price_dollars(&self) -> f64 {
-        self.buy_price() as f64 / 100.0
+    pub fn buy_price_cents(&self, amount: u32) -> u32 {
+        self.buy_price(amount)
     }
 
-    pub fn sell_price_dollars(&self) -> f64 {
-        self.sell_price() as f64 / 100.0
+    pub fn sell_price_cents(&self, amount: u32) -> u32 {
+        self.sell_price(amount)
+    }
+
+    pub fn current_unit_price_cents(&self) -> u32 {
+        self.current_price()
+    }
+
+    pub fn buy_price_dollars(&self, amount: u32) -> f64 {
+        self.buy_price(amount) as f64 / 100.0
+    }
+
+    pub fn sell_price_dollars(&self, amount: u32) -> f64 {
+        self.sell_price(amount) as f64 / 100.0
+    }
+
+    pub fn current_unit_price_dollars(&self) -> f64 {
+        self.base_price(1) as f64 / 100.0
     }
 
     pub fn market_cap_dollars(&self) -> f64 {
-        self.market_cap() as f64 / 100.0
+        self.market_cap_cents() as f64 / 100.0
     }
 }
