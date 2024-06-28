@@ -178,7 +178,7 @@ impl Market {
                 .enumerate()
                 .map(|(stonk_id, amount)| {
                     let stonk = &self.stonks[stonk_id];
-                    stonk.price_per_share_in_cents as u64 * *amount as u64
+                    stonk.base_price() as u64 * *amount as u64
                 })
                 .sum::<u64>();
             if agent_stonk_value > 0 {

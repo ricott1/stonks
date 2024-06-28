@@ -295,7 +295,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
             };
 
             let today_variation = if today_initial_price > 0 {
-                (stonk.price_per_share_in_cents as f64 - today_initial_price as f64)
+                (stonk.base_price() as f64 - today_initial_price as f64)
                     / (today_initial_price as f64)
                     * 100.0
             } else {
@@ -306,8 +306,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
 
             let today_style = today_variation.style();
 
-            let max_variation = (stonk.price_per_share_in_cents as f64
-                - stonk.starting_price as f64)
+            let max_variation = (stonk.base_price() as f64 - stonk.starting_price as f64)
                 / (stonk.starting_price as f64)
                 * 100.0;
 
@@ -319,8 +318,8 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
             avg_agent_share += agent_share * stonk.number_of_shares as f64;
             let agent_style = agent_share.ustyle();
 
-            let agent_stonk_value = agent.owned_stonks()[stonk.id] as f64
-                * (stonk.price_per_share_in_cents as f64 / 100.0);
+            let agent_stonk_value =
+                agent.owned_stonks()[stonk.id] as f64 * (stonk.base_price_dollars());
             total_agent_stonk_value += agent_stonk_value;
 
             let agent_stonk_style = if agent_stonk_value > 0.0 {
@@ -794,7 +793,7 @@ fn render_header(
                     "Owned shares {} ({:.02}%) ${}",
                     amount,
                     stonk.to_stake(agent.owned_stonks()[stonk.id]) * 100.0,
-                    format_value(stonk.price_per_share_in_cents as f64 / 100.0 * amount as f64)
+                    format_value(stonk.base_price_dollars() * amount as f64)
                 )
             } else {
                 format!(

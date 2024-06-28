@@ -6,6 +6,7 @@ use tracing::{debug, info};
 
 const MIN_DRIFT: f64 = -0.2;
 const MAX_DRIFT: f64 = -MIN_DRIFT;
+const MODIFIED_PRICE_DELTA: f64 = 10.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum StonkClass {
@@ -33,7 +34,7 @@ pub struct Stonk {
     pub name: String,
     pub short_name: String,
     pub description: String,
-    pub price_per_share_in_cents: u32, //price is to be intended in cents, and displayed accordingly
+    price_per_share_in_cents: u32, //price is to be intended in cents, and displayed accordingly
     pub number_of_shares: u32,
     pub allocated_shares: u32,
     pub shareholders: Vec<(String, u32)>, // List of shareholders, always sorted from biggest to smallest.
@@ -240,19 +241,23 @@ impl Stonk {
         }
     }
 
-    fn modified_price(&self) -> f64 {
-        // let modifier = (self.number_of_shares as f64
-        //     / (self.number_of_shares - self.allocated_shares) as f64)
-        //     .powf(0.25);
-        self.price_per_share_in_cents as f64 //* modifier
+    pub fn base_price(&self) -> u32 {
+        let modifier = ((self.number_of_shares as f64 + MODIFIED_PRICE_DELTA)
+            / (self.available_amount() as f64 + MODIFIED_PRICE_DELTA))
+            .powf(0.25);
+        (self.price_per_share_in_cents as f64 * modifier) as u32
     }
 
     pub fn buy_price(&self) -> u32 {
-        (self.modified_price() * (1.0 + self.volatility)) as u32
+        (self.base_price() as f64 * (1.0 + self.volatility)) as u32
     }
 
     pub fn sell_price(&self) -> u32 {
-        (self.modified_price() * (1.0 - self.volatility)) as u32
+        (self.base_price() as f64 * (1.0 - self.volatility)) as u32
+    }
+
+    pub fn base_price_dollars(&self) -> f64 {
+        self.base_price() as f64 / 100.0
     }
 
     pub fn buy_price_dollars(&self) -> f64 {
