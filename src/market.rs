@@ -29,7 +29,8 @@ pub const NUMBER_OF_STONKS: usize = 8;
 
 const BRIBE_AMOUNT: u32 = 10_000 * 100;
 
-const GLOBAL_DRIFT_VOLATILITY: f64 = 0.25;
+const MAX_GLOBAL_DRIFT: f64 = 1.5;
+const GLOBAL_DRIFT_VOLATILITY: f64 = 0.5;
 
 #[derive(Debug, Clone, Copy, Display, EnumIter)]
 enum Season {
@@ -193,8 +194,8 @@ impl Market {
         let current_market_cap = self.total_market_cap() as f64;
         let mean = ((self.target_total_market_cap as f64 - current_market_cap)
             / current_market_cap.min(self.target_total_market_cap as f64))
-        .min(5.0)
-        .max(-5.0);
+        .min(MAX_GLOBAL_DRIFT)
+        .max(-MAX_GLOBAL_DRIFT);
 
         let global_drift = if self.last_tick % DAY_LENGTH == 0 {
             let drift = mean + rng.gen_range(-GLOBAL_DRIFT_VOLATILITY..GLOBAL_DRIFT_VOLATILITY);
