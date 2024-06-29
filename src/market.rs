@@ -191,13 +191,12 @@ impl Market {
     }
 
     pub fn tick_day(&mut self, rng: &mut ChaCha8Rng) {
-        let current_market_cap = self.total_market_cap() as f64;
-        let mean = ((self.target_total_market_cap as f64 - current_market_cap)
-            / current_market_cap.min(self.target_total_market_cap as f64))
-        .min(MAX_GLOBAL_DRIFT)
-        .max(-MAX_GLOBAL_DRIFT);
-
-        let global_drift = if self.last_tick % DAY_LENGTH == 0 {
+        let global_drift = if self.last_tick % (7 * DAY_LENGTH) == 0 {
+            let current_market_cap = self.total_market_cap() as f64;
+            let mean = ((self.target_total_market_cap as f64 - current_market_cap)
+                / current_market_cap.min(self.target_total_market_cap as f64))
+            .min(MAX_GLOBAL_DRIFT)
+            .max(-MAX_GLOBAL_DRIFT);
             let drift = mean + rng.gen_range(-GLOBAL_DRIFT_VOLATILITY..GLOBAL_DRIFT_VOLATILITY);
 
             info!(
@@ -208,6 +207,7 @@ impl Market {
         } else {
             None
         };
+
         for stonk in self.stonks.iter_mut() {
             if let Some(drift) = global_drift {
                 stonk.add_condition(
