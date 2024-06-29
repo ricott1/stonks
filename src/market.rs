@@ -29,8 +29,8 @@ pub const NUMBER_OF_STONKS: usize = 8;
 
 const BRIBE_AMOUNT: u32 = 10_000 * 100;
 
-const MAX_GLOBAL_DRIFT: f64 = 1.5;
-const GLOBAL_DRIFT_VOLATILITY: f64 = 0.5;
+const MAX_MEAN_GLOBAL_DRIFT: f64 = 0.25;
+const GLOBAL_DRIFT_VOLATILITY: f64 = 0.05;
 
 #[derive(Debug, Clone, Copy, Display, EnumIter)]
 enum Season {
@@ -195,8 +195,8 @@ impl Market {
             let current_market_cap = self.total_market_cap() as f64;
             let mean = ((self.target_total_market_cap as f64 - current_market_cap)
                 / current_market_cap.min(self.target_total_market_cap as f64))
-            .min(MAX_GLOBAL_DRIFT)
-            .max(-MAX_GLOBAL_DRIFT);
+            .min(MAX_MEAN_GLOBAL_DRIFT)
+            .max(-MAX_MEAN_GLOBAL_DRIFT);
             let drift = mean + rng.gen_range(-GLOBAL_DRIFT_VOLATILITY..GLOBAL_DRIFT_VOLATILITY);
 
             info!(
@@ -212,7 +212,7 @@ impl Market {
             if let Some(drift) = global_drift {
                 stonk.add_condition(
                     StonkCondition::Bump { amount: drift },
-                    self.last_tick + DAY_LENGTH,
+                    self.last_tick + 7 * DAY_LENGTH,
                 );
             }
             stonk.tick(self.last_tick);
