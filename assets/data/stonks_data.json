@@ -66,14 +66,14 @@
         "number_of_shares": 100000,
         "allocated_shares": 0,
         "shareholders": [],
-        "drift": 0.0,
-        "drift_volatility": 0.00025,
+        "drift": -0.001,
+        "drift_volatility": 0.0005,
         "volatility": 0.00001,
-        "shock_probability": 0.07,
-        "starting_price": 9000,
+        "shock_probability": 0.05,
+        "starting_price": 12000,
         "historical_prices": [],
         "conditions": [],
-        "dividend_probability": 0.5
+        "dividend_probability": 0.25
     },
     {
         "id": 4,
@@ -142,13 +142,13 @@
         "number_of_shares": 100000,
         "allocated_shares": 0,
         "shareholders": [],
-        "drift": -0.001,
-        "drift_volatility": 0.0005,
+        "drift": 0.0,
+        "drift_volatility": 0.00025,
         "volatility": 0.00001,
-        "shock_probability": 0.05,
-        "starting_price": 12000,
+        "shock_probability": 0.07,
+        "starting_price": 9000,
         "historical_prices": [],
         "conditions": [],
-        "dividend_probability": 0.25
+        "dividend_probability": 0.5
     }
 ]

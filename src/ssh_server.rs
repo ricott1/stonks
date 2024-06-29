@@ -526,7 +526,7 @@ impl Handler for AppServer {
         info!("Handling channel_close for {}", self.session_auth.username);
         let mut clients = self.clients.lock().await;
         clients.remove(&self.session_auth.username);
-        // session.disconnect(Disconnect::ByApplication, "Game quit", "");
+        session.disconnect(Disconnect::ByApplication, "Game quit", "");
         session.close(channel);
 
         Ok(())
@@ -541,7 +541,7 @@ impl Handler for AppServer {
         info!("Handling channel_eof for {}", self.session_auth.username);
         let mut clients = self.clients.lock().await;
         clients.remove(&self.session_auth.username);
-        // session.disconnect(Disconnect::ByApplication, "Game quit", "");
+        session.disconnect(Disconnect::ByApplication, "Game quit", "");
         session.eof(channel);
 
         Ok(())
