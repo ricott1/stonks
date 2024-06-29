@@ -29,7 +29,7 @@ pub const NUMBER_OF_STONKS: usize = 8;
 
 const BRIBE_AMOUNT: u32 = 10_000 * 100;
 
-const GLOBAL_DRIFT_VOLATILITY: f64 = 1.0;
+const GLOBAL_DRIFT_VOLATILITY: f64 = 0.25;
 
 #[derive(Debug, Clone, Copy, Display, EnumIter)]
 enum Season {
