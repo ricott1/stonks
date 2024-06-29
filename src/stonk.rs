@@ -233,11 +233,9 @@ impl Stonk {
             }
         }
 
-        // self.drift = self.drift.min(MAX_DRIFT).max(MIN_DRIFT);
-
         // Add control mechanisms for extreme prices. not ideal.
-        if (self.price_per_share_in_cents as f64) < self.starting_price as f64 / 8.0 {
-            self.add_condition(StonkCondition::Bump { amount: 2.5 }, current_tick + 1);
+        if (self.price_per_share_in_cents as f64) < self.starting_price as f64 / 4.0 {
+            self.add_condition(StonkCondition::Bump { amount: 0.5 }, current_tick + 1);
             self.add_condition(
                 StonkCondition::SetShockProbability {
                     value: 0.0,
@@ -245,8 +243,8 @@ impl Stonk {
                 },
                 current_tick + 1,
             );
-        } else if (self.price_per_share_in_cents as f64) > self.starting_price as f64 * 16.0 {
-            self.add_condition(StonkCondition::Bump { amount: -2.5 }, current_tick + 1);
+        } else if (self.price_per_share_in_cents as f64) > self.starting_price as f64 * 12.0 {
+            self.add_condition(StonkCondition::Bump { amount: -0.5 }, current_tick + 1);
             self.add_condition(
                 StonkCondition::SetShockProbability {
                     value: 0.0,
