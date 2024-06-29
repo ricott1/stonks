@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     agent::{AgentAction, AgentCondition, DecisionAgent, UserAgent, INITIAL_USER_CASH_CENTS},
     events::{CHARACTER_ASSASSINATION_COST, DIVIDEND_PAYOUT, MARKET_CRASH_COST},
-    stonk::{Stonk, StonkCondition},
+    stonk::{DollarValue, Stonk, StonkCondition},
     utils::{load_stonks_data, AppResult},
 };
 use rand::{Rng, SeedableRng};
@@ -142,8 +142,8 @@ impl Market {
         }
 
         info!(
-            "Current total market cap: ${:.02}",
-            m.total_market_cap_dollars()
+            "Current total market cap: ${}",
+            m.total_market_cap().format()
         );
 
         m
@@ -154,10 +154,6 @@ impl Market {
             .iter()
             .map(|stonk| stonk.market_cap_cents() as u64)
             .sum::<u64>()
-    }
-
-    pub fn total_market_cap_dollars(&self) -> f64 {
-        self.total_market_cap() as f64 / 100.0
     }
 
     pub fn update_target_total_market_cap(&mut self, number_of_agents: usize) -> u64 {

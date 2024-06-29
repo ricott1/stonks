@@ -6,7 +6,6 @@ use tracing::{debug, info};
 
 const MIN_DRIFT: f64 = -0.2;
 const MAX_DRIFT: f64 = -MIN_DRIFT;
-const MODIFIED_PRICE_DELTA: u32 = 10;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum StonkClass {
@@ -258,30 +257,43 @@ impl Stonk {
         }
     }
 
-    fn base_price(&self, amount: u32) -> u32 {
-        let mut price = 0;
-        for l in 0..amount {
-            let current_available_amount = self.available_amount() - l;
-            let modifier = ((self.number_of_shares + MODIFIED_PRICE_DELTA) as f64
-                / (current_available_amount + MODIFIED_PRICE_DELTA) as f64)
-                .powf(0.5);
+    fn base_price(&self) -> u32 {
+        // let mut price = 0;
+        // for l in 0..amount {
+        //     let current_available_amount = self.available_amount() - l;
+        //     let modifier = ((self.number_of_shares + MODIFIED_PRICE_DELTA) as f64
+        //         / (current_available_amount + MODIFIED_PRICE_DELTA) as f64)
+        //         .powf(0.5);
 
-            price += (self.price_per_share_in_cents as f64 * modifier) as u32
-        }
-
-        price
+        //     price += (self.price_per_share_in_cents as f64 * modifier) as u32
+        // }
+        self.price_per_share_in_cents
     }
 
     fn buy_price(&self, amount: u32) -> u32 {
-        (self.base_price(amount) as f64 * (1.0 + self.volatility)) as u32
+        // The price to buy the first share is base_price * ( 1.0 + volatility ).
+        // Each subsequent share adds one unit of volatility
+        // ( 1.0 + 2.0*volatility ) , ( 1.0 + 3.0*volatility ) ....
+        // so that the total price is just the summation
+        // giving base_price * amount * ( 1.0 + (amount + 1.0) / 2.0 * volatility )
+        ((self.base_price() * amount) as f64 * (1.0 + (amount + 1) as f64 / 2.0 * self.volatility))
+            as u32
     }
 
     fn sell_price(&self, amount: u32) -> u32 {
-        (self.base_price(amount) as f64 * (1.0 - self.volatility)) as u32
+        // The price to sell the first share is base_price * ( 1.0 - volatility ).
+        // Each subsequent share adds one unit of volatility
+        // ( 1.0 - 2.0*volatility ) , ( 1.0 - 3.0*volatility ) ....
+        // so that the total price is just the summation
+        // giving base_price * amount * ( 1.0 - (amount + 1.0) / 2.0 * volatility )
+        // Notice that the volatility is then contrained by
+        // 1 - number_of_shares * volatility >= 0 ==> volatility <= 1/number_of_shares
+        ((self.base_price() * amount) as f64 * (1.0 - (amount + 1) as f64 / 2.0 * self.volatility))
+            as u32
     }
 
     fn current_price(&self) -> u32 {
-        self.base_price(1)
+        self.base_price()
     }
 
     pub fn buy_price_cents(&self, amount: u32) -> u32 {
@@ -296,19 +308,49 @@ impl Stonk {
         self.current_price()
     }
 
-    pub fn buy_price_dollars(&self, amount: u32) -> f64 {
-        self.buy_price(amount) as f64 / 100.0
-    }
-
-    pub fn sell_price_dollars(&self, amount: u32) -> f64 {
-        self.sell_price(amount) as f64 / 100.0
-    }
-
-    pub fn current_unit_price_dollars(&self) -> f64 {
-        self.base_price(1) as f64 / 100.0
-    }
-
-    pub fn market_cap_dollars(&self) -> f64 {
-        self.market_cap_cents() as f64 / 100.0
+    pub fn max_buy_amount(&self, cash: u32) -> u32 {
+        // We need to solve cash == buy_price(amount) for amount
+        // and then take the floor of amount
+        // cash == base_price * amount * (1.0 + (amount + 1) / 2.0 * volatility)
+        let max_amount = (-(2.0 + self.volatility)
+            + (8.0 * cash as f64 * self.volatility / self.base_price() as f64
+                + (2.0 + self.volatility).powf(2.0))
+            .powf(0.5))
+            / (2.0 * self.volatility);
+        max_amount as u32
     }
 }
+
+pub trait DollarValue {
+    fn as_dollars(&self) -> f64;
+    fn format(&self) -> String {
+        let value = self.as_dollars();
+        if value > 1_000_000.0 {
+            format!("{:.03}M", value / 1_000_000.0)
+        } else if value > 1_000.0 {
+            format!("{:.03}k", value / 1_000.0)
+        } else if value >= 100.0 {
+            format!("{}", value as u32)
+        } else {
+            format!("{:.02}", value)
+        }
+    }
+}
+
+impl DollarValue for u32 {
+    fn as_dollars(&self) -> f64 {
+        *self as f64 / 100.0
+    }
+}
+
+impl DollarValue for u64 {
+    fn as_dollars(&self) -> f64 {
+        *self as f64 / 100.0
+    }
+}
+
+// impl DollarValue for f64 {
+//     fn as_dollars(&self) -> f64 {
+//         *self / 100.0
+//     }
+// }

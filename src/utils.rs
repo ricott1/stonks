@@ -286,18 +286,6 @@ pub fn convert_data_to_crossterm_event(data: &[u8]) -> Option<Event> {
     None
 }
 
-pub fn format_value(value: f64) -> String {
-    if value > 1_000_000.0 {
-        format!("{:.03}M", value / 1_000_000.0)
-    } else if value > 1_000.0 {
-        format!("{:.03}k", value / 1_000.0)
-    } else if value >= 100.0 {
-        format!("{}", value as u32)
-    } else {
-        format!("{:.02}", value)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{save_agents, AppResult};

@@ -171,12 +171,8 @@ impl Client {
                 };
 
                 let stonk = &market.stonks[stonk_id];
-                let price = stonk.buy_price_cents(1);
-                let max_buy_amount = if price > 0 {
-                    (agent.cash() / price).min(stonk.available_amount())
-                } else {
-                    0
-                };
+                let max_buy_amount = stonk.max_buy_amount(agent.cash());
+
                 let amount = if key_event.modifiers == KeyModifiers::SHIFT {
                     100
                 } else {
@@ -194,12 +190,7 @@ impl Client {
                     self.ui_options.selected_stonk_index
                 };
                 let stonk = &market.stonks[stonk_id];
-                let price = stonk.buy_price_cents(1);
-                let max_buy_amount = if price > 0 {
-                    (agent.cash() / price).min(stonk.available_amount())
-                } else {
-                    0
-                };
+                let max_buy_amount = stonk.max_buy_amount(agent.cash());
                 agent.select_action(AgentAction::Buy {
                     stonk_id,
                     amount: max_buy_amount,

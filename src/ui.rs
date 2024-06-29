@@ -2,7 +2,7 @@ use crate::agent::{AgentCondition, DecisionAgent, UserAgent};
 use crate::market::{
     GamePhase, Market, DAY_LENGTH, HISTORICAL_SIZE, MAX_EVENTS_PER_NIGHT, NIGHT_LENGTH,
 };
-use crate::stonk::Stonk;
+use crate::stonk::{DollarValue, Stonk};
 use crate::utils::*;
 use crossterm::event::KeyCode;
 use once_cell::sync::Lazy;
@@ -121,6 +121,7 @@ trait Styled {
     fn style(&self) -> Style;
     fn ustyle(&self) -> Style;
 }
+
 impl Styled for f64 {
     fn style(&self) -> Style {
         if *self >= 1.0 {
@@ -150,6 +151,15 @@ impl Styled for f64 {
         } else {
             Style::default()
         }
+    }
+}
+
+impl Styled for u64 {
+    fn style(&self) -> Style {
+        (*self as f64).style()
+    }
+    fn ustyle(&self) -> Style {
+        (*self as f64).ustyle()
     }
 }
 
@@ -274,7 +284,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
     let mut avg_today_variation = 0.0;
     let mut avg_max_variation = 0.0;
     let mut avg_agent_share = 0.0;
-    let mut total_agent_stonk_value = 0.0;
+    let mut total_agent_stonk_value = 0;
 
     let mut rows = market
         .stonks
@@ -320,10 +330,10 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
             let agent_style = agent_share.ustyle();
 
             let agent_stonk_value =
-                agent.owned_stonks()[stonk.id] as f64 * (stonk.current_unit_price_dollars());
+                agent.owned_stonks()[stonk.id] as u64 * stonk.current_unit_price_cents() as u64;
             total_agent_stonk_value += agent_stonk_value;
 
-            let agent_stonk_style = if agent_stonk_value > 0.0 {
+            let agent_stonk_style = if agent_stonk_value > 0 {
                 today_style
             } else {
                 Style::default()
@@ -340,20 +350,18 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
                 })
                 .collect::<Vec<Line>>();
 
-            let market_cap = stonk.market_cap_dollars();
-            let market_cap_text = format!("\n${}", format_value(market_cap));
+            let market_cap_text = format!("\n${}", stonk.market_cap_cents().format());
 
             Row::new(vec![
                 Cell::new(format!("\n{}", stonk.name)),
-                Cell::new(format!("\n${}", format_value(stonk.buy_price_dollars(1))))
+                Cell::new(format!("\n${}", stonk.buy_price_cents(1).format()))
                     .style(Style::default()),
-                Cell::new(format!("\n${}", format_value(stonk.sell_price_dollars(1))))
+                Cell::new(format!("\n${}", stonk.sell_price_cents(1).format()))
                     .style(Style::default()),
                 Cell::new(format!("\n{:+.2}%", today_variation)).style(today_style),
                 Cell::new(format!("\n{:+.2}%", max_variation)).style(max_style),
                 Cell::new(format!("\n{:.02}%", agent_share)).style(agent_style),
-                Cell::new(format!("\n${}", format_value(agent_stonk_value)))
-                    .style(agent_stonk_style),
+                Cell::new(format!("\n${}", agent_stonk_value.format())).style(agent_stonk_style),
                 Cell::new(market_cap_text).style(max_style),
                 Cell::new(top_shareholders),
             ])
@@ -372,8 +380,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
     avg_max_variation /= total_number_of_shares;
     avg_agent_share /= total_number_of_shares;
 
-    let total_market_cap = market.total_market_cap_dollars();
-    let total_market_cap_text = format!("\n${}", format_value(total_market_cap));
+    let total_market_cap_text = format!("\n${}", market.total_market_cap().format());
 
     let total_max_variation_style = (avg_max_variation / 10.0).style();
 
@@ -382,8 +389,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
         .iter()
         .take(3)
         .map(|(holder, amount)| {
-            let amount_dollars = *amount as f64 / 100.0;
-            let amount_text = format!("${}", format_value(amount_dollars));
+            let amount_text = format!("${}", amount.format());
 
             Line::from(format!("{} {}", holder, amount_text))
         })
@@ -396,7 +402,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
         Cell::new(format!("\n{:+.2}%", avg_today_variation)).style(avg_today_variation.style()),
         Cell::new(format!("\n{:+.2}%", avg_max_variation)).style(total_max_variation_style),
         Cell::new(format!("\n{:.02}%", avg_agent_share)).style(avg_agent_share.ustyle()),
-        Cell::new(format!("\n${}", format_value(total_agent_stonk_value)))
+        Cell::new(format!("\n${}", total_agent_stonk_value.format()))
             .style(total_agent_stonk_value.style()),
         Cell::new(total_market_cap_text).style(total_max_variation_style),
         Cell::new(top_portfolios),
@@ -783,7 +789,7 @@ fn render_header(
                     "Owned shares {} ({:.02}%) - value ${}",
                     amount,
                     stonk.to_stake(agent.owned_stonks()[stonk.id]) * 100.0,
-                    format_value(stonk.current_unit_price_dollars() * amount as f64)
+                    (stonk.current_unit_price_cents() * amount).format()
                 )
             } else {
                 format!(
@@ -863,32 +869,25 @@ fn render_footer(
                 ui_options.selected_stonk_index
             };
             let stonk = &market.stonks[stonk_id];
-            //FIXME: this calculation is not precise since the price changes with the amount
-            // we would need to solve n = cash / price(n)
-            let price = stonk.buy_price_cents(1);
-            let max_buy_amount = if price > 0 {
-                (agent.cash() / price).min(stonk.available_amount())
-            } else {
-                0
-            };
+            let max_buy_amount = stonk.max_buy_amount(agent.cash());
 
             lines.push(
                 format!(
                     "{:28} {:28} {:28}",
                     format!(
-                        "`b`: buy  x{} (${:.02})",
+                        "`b`: buy  x{} (${})",
                         1.min(max_buy_amount),
-                        stonk.buy_price_dollars(1.min(max_buy_amount))
+                        stonk.buy_price_cents(1.min(max_buy_amount)).format()
                     ),
                     format!(
-                        "`B`: buy  x{} (${:.02})",
+                        "`B`: buy  x{} (${})",
                         100.min(max_buy_amount),
-                        stonk.buy_price_dollars(100.min(max_buy_amount))
+                        stonk.buy_price_cents(100.min(max_buy_amount)).format()
                     ),
                     format!(
-                        "`m`: buy  x{} (${:.02})",
+                        "`m`: buy  x{} (${})",
                         max_buy_amount,
-                        stonk.buy_price_dollars(max_buy_amount)
+                        stonk.buy_price_cents(max_buy_amount).format()
                     ),
                 )
                 .into(),
@@ -898,19 +897,19 @@ fn render_footer(
                 format!(
                     "{:28} {:28} {:28}",
                     format!(
-                        "`s`: sell x{} (${:.02})",
+                        "`s`: sell x{} (${})",
                         1.min(owned_amount),
-                        stonk.sell_price_dollars(1.min(owned_amount))
+                        stonk.sell_price_cents(1.min(owned_amount)).format()
                     ),
                     format!(
-                        "`S`: sell x{} (${:.02})",
+                        "`S`: sell x{} (${})",
                         100.min(owned_amount),
-                        stonk.sell_price_dollars(100.min(owned_amount))
+                        stonk.sell_price_cents(100.min(owned_amount)).format()
                     ),
                     format!(
-                        "`d`: sell x{} (${:.02})",
+                        "`d`: sell x{} (${})",
                         owned_amount,
-                        stonk.sell_price_dollars(owned_amount)
+                        stonk.sell_price_cents(owned_amount).format()
                     ),
                 )
                 .into(),

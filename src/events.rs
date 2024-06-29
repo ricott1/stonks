@@ -1,8 +1,7 @@
 use crate::{
     agent::{AgentAction, DecisionAgent},
     market::{Market, DAY_LENGTH},
-    stonk::{Stonk, StonkClass},
-    utils::format_value,
+    stonk::{DollarValue, Stonk, StonkClass},
 };
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -121,14 +120,14 @@ impl NightEvent {
                 let yesterday_gain = (yesterday_closing_price - yesterday_opening_price) as f64
                     / yesterday_opening_price as f64;
 
-                let dividend = agent.owned_stonks()[*stonk_id] as f64
-                    * stonk.current_unit_price_dollars()
+                let dividend = ((agent.owned_stonks()[*stonk_id] * stonk.current_unit_price_cents())
+                    as f64
                     * DIVIDEND_PAYOUT
-                    * yesterday_gain;
+                    * yesterday_gain) as u32;
                 vec![
                     format!("{} is paying", stonk.name),
                     format!("dividends, you will get",),
-                    format!("${}.", format_value(dividend)),
+                    format!("${}.", dividend.format()),
                 ]
             }
         };
@@ -250,7 +249,15 @@ impl NightEvent {
             Self::ReceiveDividends { stonk_id } => {
                 let stonk_id = stonk_id.clone();
                 Box::new(move |agent, market| {
+                    if agent.owned_stonks()[stonk_id] == 0 {
+                        return false;
+                    }
                     let stonk = &market.stonks[stonk_id];
+
+                    if stonk.current_unit_price_cents() == 0 {
+                        return false;
+                    }
+
                     let yesterday_opening_price =
                         stonk.historical_prices[stonk.historical_prices.len() - DAY_LENGTH];
                     let yesterday_closing_price =
@@ -262,18 +269,8 @@ impl NightEvent {
                         return false;
                     }
 
-                    let yesterday_gain = (yesterday_closing_price - yesterday_opening_price) as f64
-                        / yesterday_opening_price as f64;
-
-                    let dividend = agent.owned_stonks()[stonk_id] as f64
-                        * stonk.current_unit_price_dollars()
-                        * DIVIDEND_PAYOUT
-                        * yesterday_gain;
-
-                    dividend > 0.0 && {
-                        let rng = &mut rand::thread_rng();
-                        rng.gen_bool(stonk.dividend_probability)
-                    }
+                    let rng = &mut rand::thread_rng();
+                    rng.gen_bool(stonk.dividend_probability)
                 })
             }
         }
