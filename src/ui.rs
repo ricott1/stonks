@@ -655,7 +655,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
         Cell::new(format!("\n")),
         Cell::new(format!("\n{:+.2}%", avg_today_variation)).style(avg_today_variation.style()),
         Cell::new(format!("\n{:+.2}%", avg_max_variation)).style(total_max_variation_style),
-        Cell::new(format!("\n{:.02}%", avg_agent_share)).style(avg_agent_share.ustyle()),
+        Cell::new(format!("\n{:.03}%", avg_agent_share)).style(avg_agent_share.ustyle()),
         Cell::new(format!("\n${}", total_agent_stonk_value.format()))
             .style(total_agent_stonk_value.style()),
         Cell::new(total_market_cap_text).style(total_max_variation_style),
