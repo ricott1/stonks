@@ -12,7 +12,7 @@ use strum_macros::EnumIter;
 pub const CHARACTER_ASSASSINATION_COST: u32 = 5_000 * 100;
 pub const MARKET_CRASH_COST: u32 = 50_000 * 100;
 const MARKET_CRASH_PREREQUISITE: u32 = 100_000 * 100;
-pub const DIVIDEND_PAYOUT: f64 = 0.01;
+pub const DIVIDEND_PAYOUT: f64 = 0.1;
 
 #[derive(Debug, Clone, EnumIter, Display, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum EventRarity {
