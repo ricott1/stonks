@@ -170,7 +170,7 @@ impl Market {
     ) -> &Vec<(String, u64)> {
         let mut portfolios = vec![];
         for (username, agent) in agents.iter() {
-            let agent_stonk_value = agent
+            let agent_value = agent
                 .owned_stonks()
                 .iter()
                 .enumerate()
@@ -178,9 +178,10 @@ impl Market {
                     let stonk = &self.stonks[stonk_id];
                     stonk.current_unit_price_cents() as u64 * *amount as u64
                 })
-                .sum::<u64>();
-            if agent_stonk_value > 0 {
-                portfolios.push((username.clone(), agent_stonk_value));
+                .sum::<u64>()
+                + agent.cash() as u64;
+            if agent_value > 0 {
+                portfolios.push((username.clone(), agent_value));
             }
         }
 

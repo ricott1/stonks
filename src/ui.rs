@@ -527,7 +527,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
         "Stake",
         "Value",
         "Market cap",
-        "Top portfolios",
+        "Top dogs",
     ]
     .into_iter()
     .map(Cell::from)
