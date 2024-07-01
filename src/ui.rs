@@ -39,8 +39,8 @@ const NO_ANIMATION_FRAMES: usize = 6;
 const CARD_ANIMATION_FRAMES: usize = NO_ANIMATION_FRAMES + CARD_WIDTH as usize + 1;
 const ANIMATION_RATE: usize = 2;
 
-static STONKS_CARDS: Lazy<Vec<Vec<Line>>> = Lazy::new(|| {
-    let back_image = read_image("images/stonks.png").expect("Cannot load image from file");
+fn image_to_cards(path: &str) -> Vec<Vec<Line>> {
+    let back_image = read_image(path).expect("Cannot load image from file");
     let back_lines = img_to_lines(&back_image).expect("Cannot convert image to lines");
     let front_image = read_image("images/card_front.png").expect("Cannot load image from file");
 
@@ -118,171 +118,12 @@ static STONKS_CARDS: Lazy<Vec<Vec<Line>>> = Lazy::new(|| {
             img_to_lines(&front_image).expect("Cannot convert image to lines")
         })
         .collect::<Vec<Vec<Line>>>()
-});
+}
 
-static DOGE_CARDS: Lazy<Vec<Vec<Line>>> = Lazy::new(|| {
-    let back_image = read_image("images/doge.png").expect("Cannot load image from file");
-    let back_lines = img_to_lines(&back_image).expect("Cannot convert image to lines");
-    let front_image = read_image("images/card_front.png").expect("Cannot load image from file");
-
-    // The whole night lasts for NIGHT_LENGTH (6 * 4 = 24 at the moment) seconds.
-    // The game renders at 20 FPS, so we got 480 frames total. We want to finish the card animation
-    // in 40 frames (2 seconds).
-    let no_resize_frames = 8;
-
-    (0..40)
-        .map(|n| {
-            let mut idx = n;
-            // Initial static card back
-            if idx < no_resize_frames {
-                return back_lines.clone();
-            }
-
-            idx -= no_resize_frames;
-            // card back shrinking animation
-            if idx < CARD_WIDTH as u32 / 2 {
-                let nwidth = CARD_WIDTH as u32 - 2 * idx;
-                let nheight = CARD_HEIGHT as u32;
-                let resized_image =
-                    resize_image(&back_image, nwidth, nheight).expect("Cannot resize image");
-                let lines = img_to_lines(&resized_image).expect("Cannot convert image to lines");
-
-                return lines
-                    .iter()
-                    .map(|l| {
-                        let mut spans = vec![];
-
-                        spans.push(Span::raw(
-                            " ".repeat((CARD_WIDTH as usize - nwidth as usize) / 2),
-                        ));
-                        for l in l.spans.iter() {
-                            spans.push(l.clone());
-                        }
-                        spans.push(Span::raw(
-                            " ".repeat((CARD_WIDTH as usize - nwidth as usize) / 2),
-                        ));
-
-                        Line::from(spans)
-                    })
-                    .collect();
-            }
-
-            idx -= CARD_WIDTH as u32 / 2;
-            // card front expanding animation
-            if idx < CARD_WIDTH as u32 / 2 {
-                let nwidth = 2 * idx;
-                let nheight = CARD_HEIGHT as u32;
-                let resized_image =
-                    resize_image(&front_image, nwidth, nheight).expect("Cannot resize image");
-                let lines = img_to_lines(&resized_image).expect("Cannot convert image to lines");
-
-                return lines
-                    .iter()
-                    .map(|l| {
-                        let mut spans = vec![];
-
-                        spans.push(Span::raw(
-                            " ".repeat((CARD_WIDTH as usize - nwidth as usize) / 2),
-                        ));
-                        for l in l.spans.iter() {
-                            spans.push(l.clone());
-                        }
-                        spans.push(Span::raw(
-                            " ".repeat((CARD_WIDTH as usize - nwidth as usize) / 2),
-                        ));
-
-                        Line::from(spans)
-                    })
-                    .collect();
-            }
-
-            //card front
-            img_to_lines(&front_image).expect("Cannot convert image to lines")
-        })
-        .collect::<Vec<Vec<Line>>>()
-});
-
-static ELON_CARDS: Lazy<Vec<Vec<Line>>> = Lazy::new(|| {
-    let back_image = read_image("images/elon.png").expect("Cannot load image from file");
-    let back_lines = img_to_lines(&back_image).expect("Cannot convert image to lines");
-    let front_image = read_image("images/card_front.png").expect("Cannot load image from file");
-
-    // The whole night lasts for NIGHT_LENGTH (6 * 4 = 24 at the moment) seconds.
-    // The game renders at 20 FPS, so we got 480 frames total. We want to finish the card animation
-    // in 40 frames (2 seconds).
-    let no_resize_frames = 8;
-
-    (0..40)
-        .map(|n| {
-            let mut idx = n;
-            // Initial static card back
-            if idx < no_resize_frames {
-                return back_lines.clone();
-            }
-
-            idx -= no_resize_frames;
-            // card back shrinking animation
-            if idx < CARD_WIDTH as u32 / 2 {
-                let nwidth = CARD_WIDTH as u32 - 2 * idx;
-                let nheight = CARD_HEIGHT as u32;
-                let resized_image =
-                    resize_image(&back_image, nwidth, nheight).expect("Cannot resize image");
-                let lines = img_to_lines(&resized_image).expect("Cannot convert image to lines");
-
-                return lines
-                    .iter()
-                    .map(|l| {
-                        let mut spans = vec![];
-
-                        spans.push(Span::raw(
-                            " ".repeat((CARD_WIDTH as usize - nwidth as usize) / 2),
-                        ));
-                        for l in l.spans.iter() {
-                            spans.push(l.clone());
-                        }
-                        spans.push(Span::raw(
-                            " ".repeat((CARD_WIDTH as usize - nwidth as usize) / 2),
-                        ));
-
-                        Line::from(spans)
-                    })
-                    .collect();
-            }
-
-            idx -= CARD_WIDTH as u32 / 2;
-            // card front expanding animation
-            if idx < CARD_WIDTH as u32 / 2 {
-                let nwidth = 2 * idx;
-                let nheight = CARD_HEIGHT as u32;
-                let resized_image =
-                    resize_image(&front_image, nwidth, nheight).expect("Cannot resize image");
-                let lines = img_to_lines(&resized_image).expect("Cannot convert image to lines");
-
-                return lines
-                    .iter()
-                    .map(|l| {
-                        let mut spans = vec![];
-
-                        spans.push(Span::raw(
-                            " ".repeat((CARD_WIDTH as usize - nwidth as usize) / 2),
-                        ));
-                        for l in l.spans.iter() {
-                            spans.push(l.clone());
-                        }
-                        spans.push(Span::raw(
-                            " ".repeat((CARD_WIDTH as usize - nwidth as usize) / 2),
-                        ));
-
-                        Line::from(spans)
-                    })
-                    .collect();
-            }
-
-            //card front
-            img_to_lines(&front_image).expect("Cannot convert image to lines")
-        })
-        .collect::<Vec<Vec<Line>>>()
-});
+static STONKS_CARDS: Lazy<Vec<Vec<Line>>> = Lazy::new(|| image_to_cards("images/stonks.png"));
+static DOGE_CARDS: Lazy<Vec<Vec<Line>>> = Lazy::new(|| image_to_cards("images/doge.png"));
+static ELON_CARDS: Lazy<Vec<Vec<Line>>> = Lazy::new(|| image_to_cards("images/elon.png"));
+static KIM_CARDS: Lazy<Vec<Vec<Line>>> = Lazy::new(|| image_to_cards("images/kim.png"));
 
 static UNSELECTED_CARD: Lazy<Vec<Line>> = Lazy::new(|| {
     let image = read_image("images/unselected_card.png").expect("Cannot load image from file");
@@ -1242,7 +1083,7 @@ pub fn render(
 
 #[cfg(test)]
 mod tests {
-    use super::{DOGE_CARDS, ELON_CARDS, STONKS_CARDS};
+    use super::{ANIMATION_RATE, CARD_WIDTH, DOGE_CARDS, ELON_CARDS, KIM_CARDS, STONKS_CARDS};
     use crate::utils::AppResult;
     use ratatui::{
         backend::CrosstermBackend,
@@ -1263,9 +1104,11 @@ mod tests {
         let stonks = STONKS_CARDS.clone();
         let doge = DOGE_CARDS.clone();
         let elon = ELON_CARDS.clone();
-        let rate = 2;
+        let kim = KIM_CARDS.clone();
+
+        terminal.clear()?;
         loop {
-            if idx == stonks.len() * rate {
+            if idx == stonks.len() * ANIMATION_RATE {
                 break;
             }
 
@@ -1273,24 +1116,31 @@ mod tests {
             terminal.draw(|frame| {
                 let area = frame.size();
 
-                let split = Layout::horizontal([32, 32, 32]).split(area);
+                let split = Layout::horizontal([CARD_WIDTH + 2].repeat(4)).split(area);
                 frame.render_widget(
-                    Paragraph::new(stonks[idx / rate].clone()),
+                    Paragraph::new(stonks[idx / ANIMATION_RATE].clone()),
                     split[0].inner(&Margin {
                         horizontal: 1,
                         vertical: 1,
                     }),
                 );
                 frame.render_widget(
-                    Paragraph::new(doge[idx / rate].clone()),
+                    Paragraph::new(doge[idx / ANIMATION_RATE].clone()),
                     split[1].inner(&Margin {
                         horizontal: 1,
                         vertical: 1,
                     }),
                 );
                 frame.render_widget(
-                    Paragraph::new(elon[idx / rate].clone()),
+                    Paragraph::new(elon[idx / ANIMATION_RATE].clone()),
                     split[2].inner(&Margin {
+                        horizontal: 1,
+                        vertical: 1,
+                    }),
+                );
+                frame.render_widget(
+                    Paragraph::new(kim[idx / ANIMATION_RATE ].clone()),
+                    split[3].inner(&Margin {
                         horizontal: 1,
                         vertical: 1,
                     }),
@@ -1299,6 +1149,7 @@ mod tests {
 
             idx += 1;
         }
+
         Ok(())
     }
 }
