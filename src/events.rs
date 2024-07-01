@@ -6,14 +6,20 @@ use crate::{
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
+use strum::Display;
 use strum_macros::EnumIter;
 
-const A_GOOD_OFFER_PROBABILITY: f64 = 0.4;
-const LUCKY_NIGHT_PROBABILITY: f64 = 0.25;
 pub const CHARACTER_ASSASSINATION_COST: u32 = 5_000 * 100;
 pub const MARKET_CRASH_COST: u32 = 50_000 * 100;
 const MARKET_CRASH_PREREQUISITE: u32 = 100_000 * 100;
 pub const DIVIDEND_PAYOUT: f64 = 0.01;
+
+#[derive(Debug, Clone, EnumIter, Display, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum EventRarity {
+    Common,
+    Uncommon,
+    Rare,
+}
 
 #[derive(Debug, Clone, EnumIter, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum NightEvent {
@@ -47,6 +53,29 @@ impl Display for NightEvent {
 }
 
 impl NightEvent {
+    fn unlock_probability(&self) -> f64 {
+        match self.rarity() {
+            EventRarity::Common => 0.75,
+            EventRarity::Uncommon => 0.5,
+            EventRarity::Rare => 0.25,
+        }
+    }
+
+    pub fn rarity(&self) -> EventRarity {
+        match self {
+            Self::War => EventRarity::Uncommon,
+            Self::ColdWinter => EventRarity::Uncommon,
+            Self::RoyalScandal => EventRarity::Uncommon,
+            Self::PurpleBlockchain => EventRarity::Uncommon,
+            Self::MarketCrash => EventRarity::Rare,
+            Self::UltraVision => EventRarity::Common,
+            Self::CharacterAssassination { .. } => EventRarity::Uncommon,
+            Self::AGoodOffer => EventRarity::Common,
+            Self::LuckyNight => EventRarity::Common,
+            Self::ReceiveDividends { .. } => EventRarity::Common,
+        }
+    }
+
     pub fn description(&self, agent: &dyn DecisionAgent, market: &Market) -> Vec<String> {
         let mut description = match self {
             Self::War => vec![
@@ -154,8 +183,10 @@ impl NightEvent {
     }
 
     pub fn unlock_condition(&self) -> Box<dyn Fn(&dyn DecisionAgent, &Market) -> bool> {
+        let unlock_probability = self.unlock_probability();
+
         match self {
-            Self::War => Box::new(|agent, market| {
+            Self::War => Box::new(move |agent, market| {
                 let war_stonks = market
                     .stonks
                     .iter()
@@ -168,8 +199,12 @@ impl NightEvent {
                     .sum::<f64>()
                     / war_stonks.len() as f64
                     >= 1.0
+                    && {
+                        let rng = &mut rand::thread_rng();
+                        rng.gen_bool(unlock_probability)
+                    }
             }),
-            Self::ColdWinter => Box::new(|agent, market| {
+            Self::ColdWinter => Box::new(move |agent, market| {
                 let commodity_stonks = market
                     .stonks
                     .iter()
@@ -182,8 +217,12 @@ impl NightEvent {
                     .sum::<f64>()
                     / commodity_stonks.len() as f64
                     >= 1.0
+                    && {
+                        let rng = &mut rand::thread_rng();
+                        rng.gen_bool(unlock_probability)
+                    }
             }),
-            Self::RoyalScandal => Box::new(|agent, market| {
+            Self::RoyalScandal => Box::new(move |agent, market| {
                 let media_stonks = market
                     .stonks
                     .iter()
@@ -196,8 +235,12 @@ impl NightEvent {
                     .sum::<f64>()
                     / media_stonks.len() as f64
                     >= 1.0
+                    && {
+                        let rng = &mut rand::thread_rng();
+                        rng.gen_bool(unlock_probability)
+                    }
             }),
-            Self::PurpleBlockchain => Box::new(|agent, market| {
+            Self::PurpleBlockchain => Box::new(move |agent, market| {
                 let tech_stonks = market
                     .stonks
                     .iter()
@@ -210,12 +253,24 @@ impl NightEvent {
                     .sum::<f64>()
                     / tech_stonks.len() as f64
                     >= 1.0
+                    && {
+                        let rng = &mut rand::thread_rng();
+                        rng.gen_bool(unlock_probability)
+                    }
             }),
-            Self::MarketCrash => Box::new(|agent, _| agent.cash() >= MARKET_CRASH_PREREQUISITE),
-            Self::UltraVision => Box::new(|agent, market| {
+            Self::MarketCrash => Box::new(move |agent, _| {
+                agent.cash() >= MARKET_CRASH_PREREQUISITE && {
+                    let rng = &mut rand::thread_rng();
+                    rng.gen_bool(unlock_probability)
+                }
+            }),
+            Self::UltraVision => Box::new(move |agent, market| {
                 let riccardino_id = 3;
                 let riccardino = &market.stonks[riccardino_id];
-                100.0 * riccardino.to_stake(agent.owned_stonks()[riccardino_id]) >= 10.0
+                100.0 * riccardino.to_stake(agent.owned_stonks()[riccardino_id]) >= 10.0 && {
+                    let rng = &mut rand::thread_rng();
+                    rng.gen_bool(unlock_probability)
+                }
             }),
             Self::CharacterAssassination { username, .. } => {
                 let username = username.clone();
@@ -225,11 +280,14 @@ impl NightEvent {
                     //     .enumerate()
                     //     .map(|(stonk_id, &amount)| 100.0 * market.stonks[stonk_id].to_stake(amount))
                     //     .any(|s| s > 5.0);
-                    username != agent.username() && agent.cash() > CHARACTER_ASSASSINATION_COST
+                    username != agent.username() && agent.cash() > CHARACTER_ASSASSINATION_COST && {
+                        let rng = &mut rand::thread_rng();
+                        rng.gen_bool(unlock_probability)
+                    }
                     // && has_any_large_stake
                 })
             }
-            Self::AGoodOffer => Box::new(|agent, _| {
+            Self::AGoodOffer => Box::new(move |agent, _| {
                 agent
                     .past_selected_actions()
                     .get(&AgentAction::AcceptBribe.to_string())
@@ -237,13 +295,13 @@ impl NightEvent {
                     && agent.cash() < 1_000 * 100
                     && {
                         let rng = &mut rand::thread_rng();
-                        rng.gen_bool(A_GOOD_OFFER_PROBABILITY)
+                        rng.gen_bool(unlock_probability)
                     }
             }),
-            Self::LuckyNight => Box::new(|agent, _| {
+            Self::LuckyNight => Box::new(move |agent, _| {
                 agent.cash() < 2_000 * 100 && {
                     let rng = &mut rand::thread_rng();
-                    rng.gen_bool(LUCKY_NIGHT_PROBABILITY)
+                    rng.gen_bool(unlock_probability)
                 }
             }),
             Self::ReceiveDividends { stonk_id } => {
@@ -270,7 +328,7 @@ impl NightEvent {
                     }
 
                     let rng = &mut rand::thread_rng();
-                    rng.gen_bool(stonk.dividend_probability)
+                    rng.gen_bool(unlock_probability)
                 })
             }
         }
@@ -314,15 +372,9 @@ impl NightEvent {
                 "greedy now;".to_string(),
                 format!("Cash >= ${}", CHARACTER_ASSASSINATION_COST / 100),
             ],
-            Self::AGoodOffer => vec![
-                "Random chance,".to_string(),
-                "happens only once".to_string(),
-            ],
-            Self::LuckyNight => vec!["Random chance".to_string()],
-            Self::ReceiveDividends { .. } => vec![
-                "Stonk price increased".to_string(),
-                "and random chance".to_string(),
-            ],
+            Self::AGoodOffer => vec!["Happens only once".to_string()],
+            Self::LuckyNight => vec!["Got lucky ;)".to_string()],
+            Self::ReceiveDividends { .. } => vec!["Stonk price increased.".to_string()],
         }
     }
 

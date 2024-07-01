@@ -70,7 +70,7 @@ impl AppServer {
             );
             loop {
                 m.tick_day(rng);
-                if m.last_tick >= HISTORICAL_SIZE {
+                if m.last_tick == HISTORICAL_SIZE / 4 {
                     break;
                 }
             }

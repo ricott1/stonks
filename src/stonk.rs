@@ -4,29 +4,24 @@ use rand_distr::{Cauchy, Distribution, Normal};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
-const MIN_DRIFT: f64 = -0.2;
-const MAX_DRIFT: f64 = -MIN_DRIFT;
+const MAX_PRICE_DRIFT: f64 = 0.2;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum StonkClass {
+    #[default]
     Media,
     War,
     Commodity,
     Technology,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum StonkCondition {
-    Bump {
-        amount: f64,
-    },
-    SetShockProbability {
-        value: f64,
-        previous_shock_probability: f64,
-    },
+    Bump { amount: f64 },
+    IncreasedShockProbability,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Stonk {
     pub id: usize,
     pub class: StonkClass,
@@ -44,14 +39,31 @@ pub struct Stonk {
     pub starting_price: u32,
     pub historical_prices: Vec<u32>,
     conditions: Vec<(usize, StonkCondition)>,
-    #[serde(default)]
-    pub dividend_probability: f64,
 }
 
 impl Stonk {
     fn sort_shareholders(&mut self) {
         self.shareholders.retain(|(_, amount)| *amount > 0);
         self.shareholders.sort_by(|(_, a), (_, b)| b.cmp(a));
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn set_test_values(
+        &mut self,
+        price_per_share_in_cents: u32,
+        number_of_shares: u32,
+        drift: f64,
+        drift_volatility: f64,
+        volatility: f64,
+        shock_probability: f64,
+    ) {
+        self.price_per_share_in_cents = price_per_share_in_cents;
+        self.starting_price = self.price_per_share_in_cents;
+        self.number_of_shares = number_of_shares;
+        self.drift = drift;
+        self.drift_volatility = drift_volatility;
+        self.volatility = volatility;
+        self.shock_probability = shock_probability;
     }
 
     pub fn to_stake(&self, amount: u32) -> f64 {
@@ -62,16 +74,16 @@ impl Stonk {
         let share = self.to_stake(amount) * 100.0;
         if share >= 5.0 {
             format!(
-                "Price ${:.02} - Drift {:.03} - Volatility {:.03}",
+                "Price ${:.02} - Drift {:.03}% - Volatility {:.03}%",
                 self.price_per_share_in_cents as f64 / 100.0,
-                self.drift,
-                self.volatility
+                self.drift * 100.0,
+                self.volatility * 100.0
             )
         } else if share >= 1.0 {
             format!(
-                "Price ${:.02} - Drift {:.03}",
+                "Price ${:.02} - Drift {:.03}%",
                 self.price_per_share_in_cents as f64 / 100.0,
-                self.drift
+                self.drift * 100.0
             )
         } else {
             format!(
@@ -155,19 +167,12 @@ impl Stonk {
         Ok(())
     }
 
-    pub fn apply_conditions(&mut self, current_tick: usize) {
-        for (until_tick, condition) in self.conditions.iter() {
+    fn apply_conditions(&mut self, current_tick: usize) {
+        for (_, condition) in self.conditions.iter() {
             match condition {
                 StonkCondition::Bump { amount } => self.drift += amount * self.drift_volatility,
-                StonkCondition::SetShockProbability {
-                    value,
-                    previous_shock_probability,
-                } => {
-                    if *until_tick > current_tick {
-                        self.shock_probability = *value
-                    } else {
-                        self.shock_probability = *previous_shock_probability
-                    }
+                StonkCondition::IncreasedShockProbability => {
+                    // This condition is checked during the stonk tick
                 }
             }
         }
@@ -184,22 +189,28 @@ impl Stonk {
         self.apply_conditions(current_tick);
 
         let rng = &mut rand::thread_rng();
-        let price_drift = if rng.gen_bool(self.shock_probability) {
+        let shock_probability = if self
+            .conditions
+            .iter()
+            .any(|(_, condition)| *condition == StonkCondition::IncreasedShockProbability)
+        {
+            (2.0 * self.shock_probability).min(0.2)
+        } else {
+            self.shock_probability
+        };
+        let price_drift = if rng.gen_bool(shock_probability) {
             Cauchy::new(self.drift, self.volatility)
                 .expect("Failed to sample tick distribution")
                 .sample(rng)
         } else {
-            // self.price_per_share_in_cents = if rng.gen_bool((1.0 + self.drift) / 2.0) {
-            //     self.buy_price().max(2)
-            // } else {
-            //     self.sell_price().max(1)
-            // };
-            Normal::new(self.drift, self.volatility)
-                .expect("Failed to sample tick distribution")
-                .sample(rng)
+            self.drift
+                + self.volatility
+                    * Normal::new(0.0, 1.0)
+                        .expect("Failed to sample tick distribution")
+                        .sample(rng)
         }
-        .min(MAX_DRIFT)
-        .max(MIN_DRIFT);
+        .min(MAX_PRICE_DRIFT)
+        .max(-MAX_PRICE_DRIFT);
 
         self.price_per_share_in_cents = ((self.price_per_share_in_cents as f64
             * (1.0 + price_drift)) as u32)
@@ -219,39 +230,20 @@ impl Stonk {
         );
 
         self.drift /= 2.0;
-        if price_drift > 0.0 {
-            if self.drift > 0.0 {
-                self.add_condition(StonkCondition::Bump { amount: 1.0 }, current_tick + 1);
-            } else {
-                self.add_condition(StonkCondition::Bump { amount: 2.5 }, current_tick + 3);
-            }
-        } else if price_drift < 0.0 {
-            if self.drift > 0.0 {
-                self.add_condition(StonkCondition::Bump { amount: -1.0 }, current_tick + 3);
-            } else {
-                self.add_condition(StonkCondition::Bump { amount: -2.5 }, current_tick + 1);
-            }
-        }
+        self.add_condition(
+            StonkCondition::Bump {
+                amount: price_drift,
+            },
+            current_tick + 1,
+        );
 
         // Add control mechanisms for extreme prices. not ideal.
-        if (self.price_per_share_in_cents as f64) < self.starting_price as f64 / 4.0 {
-            self.add_condition(StonkCondition::Bump { amount: 0.5 }, current_tick + 1);
-            self.add_condition(
-                StonkCondition::SetShockProbability {
-                    value: 0.0,
-                    previous_shock_probability: self.shock_probability,
-                },
-                current_tick + 1,
-            );
-        } else if (self.price_per_share_in_cents as f64) > self.starting_price as f64 * 12.0 {
-            self.add_condition(StonkCondition::Bump { amount: -0.5 }, current_tick + 1);
-            self.add_condition(
-                StonkCondition::SetShockProbability {
-                    value: 0.0,
-                    previous_shock_probability: self.shock_probability,
-                },
-                current_tick + 1,
-            );
+        if (self.price_per_share_in_cents as f64) < self.starting_price as f64 / 8.0 {
+            self.add_condition(StonkCondition::Bump { amount: 1.0 }, current_tick + 1);
+            self.add_condition(StonkCondition::IncreasedShockProbability, current_tick + 1);
+        } else if (self.price_per_share_in_cents as f64) > self.starting_price as f64 * 8.0 {
+            self.add_condition(StonkCondition::Bump { amount: -1.0 }, current_tick + 1);
+            self.add_condition(StonkCondition::IncreasedShockProbability, current_tick + 1);
         }
     }
 
@@ -286,8 +278,10 @@ impl Stonk {
         // giving base_price * amount * ( 1.0 - (amount + 1.0) / 2.0 * volatility )
         // Notice that the volatility is then contrained by
         // 1 - number_of_shares * volatility >= 0 ==> volatility <= 1/number_of_shares
-        ((self.base_price() * amount) as f64 * (1.0 - (amount + 1) as f64 / 2.0 * self.volatility))
-            as u32
+        ((self.base_price() * amount) as f64
+            * (1.0
+                - (amount + 1) as f64 / 2.0
+                    * self.volatility.min(1.0 / self.number_of_shares as f64))) as u32
     }
 
     fn current_price(&self) -> u32 {
@@ -327,8 +321,6 @@ pub trait DollarValue {
             format!("{:.03}M", value / 1_000_000.0)
         } else if value > 1_000.0 {
             format!("{:.03}k", value / 1_000.0)
-        } else if value >= 100.0 {
-            format!("{}", value as u32)
         } else {
             format!("{:.02}", value)
         }
@@ -346,9 +338,3 @@ impl DollarValue for u64 {
         *self as f64 / 100.0
     }
 }
-
-// impl DollarValue for f64 {
-//     fn as_dollars(&self) -> f64 {
-//         *self / 100.0
-//     }
-// }

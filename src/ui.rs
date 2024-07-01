@@ -1,8 +1,9 @@
 use crate::agent::{AgentCondition, DecisionAgent, UserAgent};
+use crate::events::{EventRarity, NightEvent};
 use crate::market::{
     GamePhase, Market, DAY_LENGTH, HISTORICAL_SIZE, MAX_EVENTS_PER_NIGHT, NIGHT_LENGTH,
 };
-use crate::stonk::{DollarValue, Stonk};
+use crate::stonk::DollarValue;
 use crate::utils::*;
 use crossterm::event::KeyCode;
 use once_cell::sync::Lazy;
@@ -34,20 +35,276 @@ static STONKS_LINES: Lazy<Vec<Line>> = Lazy::new(|| {
         .collect::<Vec<Line>>()
 });
 
+const NO_ANIMATION_FRAMES: usize = 6;
+const CARD_ANIMATION_FRAMES: usize = NO_ANIMATION_FRAMES + CARD_WIDTH as usize + 1;
+const ANIMATION_RATE: usize = 2;
+
 static STONKS_CARDS: Lazy<Vec<Vec<Line>>> = Lazy::new(|| {
-    (1..=13)
+    let back_image = read_image("images/stonks.png").expect("Cannot load image from file");
+    let back_lines = img_to_lines(&back_image).expect("Cannot convert image to lines");
+    let front_image = read_image("images/card_front.png").expect("Cannot load image from file");
+
+    // The whole night lasts for NIGHT_LENGTH (6 * 4 = 24 at the moment) seconds.
+    // The game renders at 20 FPS, so we got 480 frames total. We want to finish the card animation
+    // in 40 frames (2 seconds).
+
+    (0..CARD_ANIMATION_FRAMES)
         .map(|n| {
-            img_to_lines(format!("images/card{:02}.png", n).as_str())
-                .expect("Cannot load stonk image")
+            let mut idx = n;
+            // Initial static card back
+            if idx < NO_ANIMATION_FRAMES {
+                return back_lines.clone();
+            }
+
+            idx -= NO_ANIMATION_FRAMES;
+            // card back shrinking animation
+            if idx < CARD_WIDTH as usize / 2 {
+                let nwidth = CARD_WIDTH as u32 - 2 * idx as u32;
+                let nheight = CARD_HEIGHT as u32;
+                let resized_image =
+                    resize_image(&back_image, nwidth, nheight).expect("Cannot resize image");
+                let lines = img_to_lines(&resized_image).expect("Cannot convert image to lines");
+
+                return lines
+                    .iter()
+                    .map(|l| {
+                        let mut spans = vec![];
+
+                        spans.push(Span::raw(
+                            " ".repeat((CARD_WIDTH as usize - nwidth as usize) / 2),
+                        ));
+                        for l in l.spans.iter() {
+                            spans.push(l.clone());
+                        }
+                        spans.push(Span::raw(
+                            " ".repeat((CARD_WIDTH as usize - nwidth as usize) / 2),
+                        ));
+
+                        Line::from(spans)
+                    })
+                    .collect();
+            }
+
+            idx -= CARD_WIDTH as usize / 2;
+            // card front expanding animation
+            if idx < CARD_WIDTH as usize / 2 {
+                let nwidth = 2 * idx as u32;
+                let nheight = CARD_HEIGHT as u32;
+                let resized_image =
+                    resize_image(&front_image, nwidth, nheight).expect("Cannot resize image");
+                let lines = img_to_lines(&resized_image).expect("Cannot convert image to lines");
+
+                return lines
+                    .iter()
+                    .map(|l| {
+                        let mut spans = vec![];
+
+                        spans.push(Span::raw(
+                            " ".repeat((CARD_WIDTH as usize - nwidth as usize) / 2),
+                        ));
+                        for l in l.spans.iter() {
+                            spans.push(l.clone());
+                        }
+                        spans.push(Span::raw(
+                            " ".repeat((CARD_WIDTH as usize - nwidth as usize) / 2),
+                        ));
+
+                        Line::from(spans)
+                    })
+                    .collect();
+            }
+
+            //card front
+            img_to_lines(&front_image).expect("Cannot convert image to lines")
         })
         .collect::<Vec<Vec<Line>>>()
 });
 
-static UNSELECTED_CARD: Lazy<Vec<Line>> =
-    Lazy::new(|| img_to_lines("images/unselected_card.png").expect("Cannot load stonk image"));
+static DOGE_CARDS: Lazy<Vec<Vec<Line>>> = Lazy::new(|| {
+    let back_image = read_image("images/doge.png").expect("Cannot load image from file");
+    let back_lines = img_to_lines(&back_image).expect("Cannot convert image to lines");
+    let front_image = read_image("images/card_front.png").expect("Cannot load image from file");
 
-const CARD_WIDTH: u16 = 28;
-const CARD_HEIGHT: u16 = 40 / 2;
+    // The whole night lasts for NIGHT_LENGTH (6 * 4 = 24 at the moment) seconds.
+    // The game renders at 20 FPS, so we got 480 frames total. We want to finish the card animation
+    // in 40 frames (2 seconds).
+    let no_resize_frames = 8;
+
+    (0..40)
+        .map(|n| {
+            let mut idx = n;
+            // Initial static card back
+            if idx < no_resize_frames {
+                return back_lines.clone();
+            }
+
+            idx -= no_resize_frames;
+            // card back shrinking animation
+            if idx < CARD_WIDTH as u32 / 2 {
+                let nwidth = CARD_WIDTH as u32 - 2 * idx;
+                let nheight = CARD_HEIGHT as u32;
+                let resized_image =
+                    resize_image(&back_image, nwidth, nheight).expect("Cannot resize image");
+                let lines = img_to_lines(&resized_image).expect("Cannot convert image to lines");
+
+                return lines
+                    .iter()
+                    .map(|l| {
+                        let mut spans = vec![];
+
+                        spans.push(Span::raw(
+                            " ".repeat((CARD_WIDTH as usize - nwidth as usize) / 2),
+                        ));
+                        for l in l.spans.iter() {
+                            spans.push(l.clone());
+                        }
+                        spans.push(Span::raw(
+                            " ".repeat((CARD_WIDTH as usize - nwidth as usize) / 2),
+                        ));
+
+                        Line::from(spans)
+                    })
+                    .collect();
+            }
+
+            idx -= CARD_WIDTH as u32 / 2;
+            // card front expanding animation
+            if idx < CARD_WIDTH as u32 / 2 {
+                let nwidth = 2 * idx;
+                let nheight = CARD_HEIGHT as u32;
+                let resized_image =
+                    resize_image(&front_image, nwidth, nheight).expect("Cannot resize image");
+                let lines = img_to_lines(&resized_image).expect("Cannot convert image to lines");
+
+                return lines
+                    .iter()
+                    .map(|l| {
+                        let mut spans = vec![];
+
+                        spans.push(Span::raw(
+                            " ".repeat((CARD_WIDTH as usize - nwidth as usize) / 2),
+                        ));
+                        for l in l.spans.iter() {
+                            spans.push(l.clone());
+                        }
+                        spans.push(Span::raw(
+                            " ".repeat((CARD_WIDTH as usize - nwidth as usize) / 2),
+                        ));
+
+                        Line::from(spans)
+                    })
+                    .collect();
+            }
+
+            //card front
+            img_to_lines(&front_image).expect("Cannot convert image to lines")
+        })
+        .collect::<Vec<Vec<Line>>>()
+});
+
+static ELON_CARDS: Lazy<Vec<Vec<Line>>> = Lazy::new(|| {
+    let back_image = read_image("images/elon.png").expect("Cannot load image from file");
+    let back_lines = img_to_lines(&back_image).expect("Cannot convert image to lines");
+    let front_image = read_image("images/card_front.png").expect("Cannot load image from file");
+
+    // The whole night lasts for NIGHT_LENGTH (6 * 4 = 24 at the moment) seconds.
+    // The game renders at 20 FPS, so we got 480 frames total. We want to finish the card animation
+    // in 40 frames (2 seconds).
+    let no_resize_frames = 8;
+
+    (0..40)
+        .map(|n| {
+            let mut idx = n;
+            // Initial static card back
+            if idx < no_resize_frames {
+                return back_lines.clone();
+            }
+
+            idx -= no_resize_frames;
+            // card back shrinking animation
+            if idx < CARD_WIDTH as u32 / 2 {
+                let nwidth = CARD_WIDTH as u32 - 2 * idx;
+                let nheight = CARD_HEIGHT as u32;
+                let resized_image =
+                    resize_image(&back_image, nwidth, nheight).expect("Cannot resize image");
+                let lines = img_to_lines(&resized_image).expect("Cannot convert image to lines");
+
+                return lines
+                    .iter()
+                    .map(|l| {
+                        let mut spans = vec![];
+
+                        spans.push(Span::raw(
+                            " ".repeat((CARD_WIDTH as usize - nwidth as usize) / 2),
+                        ));
+                        for l in l.spans.iter() {
+                            spans.push(l.clone());
+                        }
+                        spans.push(Span::raw(
+                            " ".repeat((CARD_WIDTH as usize - nwidth as usize) / 2),
+                        ));
+
+                        Line::from(spans)
+                    })
+                    .collect();
+            }
+
+            idx -= CARD_WIDTH as u32 / 2;
+            // card front expanding animation
+            if idx < CARD_WIDTH as u32 / 2 {
+                let nwidth = 2 * idx;
+                let nheight = CARD_HEIGHT as u32;
+                let resized_image =
+                    resize_image(&front_image, nwidth, nheight).expect("Cannot resize image");
+                let lines = img_to_lines(&resized_image).expect("Cannot convert image to lines");
+
+                return lines
+                    .iter()
+                    .map(|l| {
+                        let mut spans = vec![];
+
+                        spans.push(Span::raw(
+                            " ".repeat((CARD_WIDTH as usize - nwidth as usize) / 2),
+                        ));
+                        for l in l.spans.iter() {
+                            spans.push(l.clone());
+                        }
+                        spans.push(Span::raw(
+                            " ".repeat((CARD_WIDTH as usize - nwidth as usize) / 2),
+                        ));
+
+                        Line::from(spans)
+                    })
+                    .collect();
+            }
+
+            //card front
+            img_to_lines(&front_image).expect("Cannot convert image to lines")
+        })
+        .collect::<Vec<Vec<Line>>>()
+});
+
+static UNSELECTED_CARD: Lazy<Vec<Line>> = Lazy::new(|| {
+    let image = read_image("images/unselected_card.png").expect("Cannot load image from file");
+    img_to_lines(&image).expect("Cannot load stonk image")
+});
+
+trait Carded {
+    fn cards(&self) -> &Vec<Vec<Line>>;
+}
+
+impl Carded for NightEvent {
+    fn cards(&self) -> &Vec<Vec<Line>> {
+        match self.rarity() {
+            EventRarity::Common => &*STONKS_CARDS,
+            EventRarity::Uncommon => &*DOGE_CARDS,
+            EventRarity::Rare => &*ELON_CARDS,
+        }
+    }
+}
+
+const CARD_WIDTH: u16 = 30;
+const CARD_HEIGHT: u16 = 40;
 
 const PALETTES: [tailwind::Palette; 5] = [
     tailwind::BLUE,
@@ -81,14 +338,16 @@ impl TableColors {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub enum UiDisplay {
+    #[default]
     Stonks,
     Portfolio,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub enum ZoomLevel {
+    #[default]
     Short,
     Medium,
     Long,
@@ -163,28 +422,20 @@ impl Styled for u64 {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct UiOptions {
     pub focus_on_stonk: Option<usize>,
     display: UiDisplay,
     pub selected_stonk_index: usize,
     palette_index: usize,
-    zoom_level: ZoomLevel,
+    pub(crate) zoom_level: ZoomLevel,
     pub render_counter: usize,
     pub selected_event_card_index: usize,
 }
 
 impl UiOptions {
     pub fn new() -> Self {
-        UiOptions {
-            focus_on_stonk: None,
-            display: UiDisplay::Stonks,
-            selected_stonk_index: 0,
-            palette_index: 0,
-            zoom_level: ZoomLevel::Short,
-            render_counter: 0,
-            selected_event_card_index: 0,
-        }
+        UiOptions::default()
     }
 
     pub fn handle_key_events(&mut self, key_code: KeyCode, agent: &UserAgent) -> AppResult<()> {
@@ -259,7 +510,10 @@ impl UiOptions {
 }
 
 fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColors) -> Table<'a> {
-    let header_style = Style::default().fg(colors.header_fg).bg(colors.header_bg);
+    let header_style = Style::default()
+        .fg(colors.header_fg)
+        .bg(colors.header_bg)
+        .bold();
     let selected_style = Style::default()
         .add_modifier(Modifier::REVERSED)
         .fg(colors.selected_style_fg);
@@ -441,9 +695,8 @@ fn render_day(
     ui_options: &UiOptions,
     area: Rect,
 ) -> AppResult<()> {
-    if let Some(stonk_id) = ui_options.focus_on_stonk {
-        let stonk = &market.stonks[stonk_id];
-        render_stonk(frame, market, agent, ui_options, stonk, area)?;
+    if ui_options.focus_on_stonk.is_some() {
+        render_stonk(frame, market, agent, ui_options, area)?;
     } else {
         let colors = TableColors::new(&PALETTES[ui_options.palette_index]);
         let table = build_stonks_table(market, agent, colors);
@@ -480,7 +733,7 @@ fn render_night(
     let v_split = Layout::vertical([
         Constraint::Length(7),
         Constraint::Length(2),
-        Constraint::Max(CARD_HEIGHT + 2),
+        Constraint::Max(CARD_HEIGHT / 2 + 2),
         Constraint::Length(2),
     ])
     .split(split[1].inner(&Margin {
@@ -496,11 +749,15 @@ fn render_night(
                 .split(v_split[2]);
 
         for i in 0..num_night_events {
+            let cards = agent.available_night_events()[i].cards();
             // If there is not more than half of the time still available, skip the animation
-            if counter < NIGHT_LENGTH / 2 && ui_options.render_counter < 3 * STONKS_CARDS.len() {
+            if counter < NIGHT_LENGTH / 2
+                && ui_options.render_counter < ANIMATION_RATE * CARD_ANIMATION_FRAMES
+            {
                 frame.render_widget(
                     Paragraph::new(
-                        STONKS_CARDS[(ui_options.render_counter / 3) % STONKS_CARDS.len()].clone(),
+                        cards[(ui_options.render_counter / ANIMATION_RATE) % CARD_ANIMATION_FRAMES]
+                            .clone(),
                     ),
                     cards_split[i].inner(&Margin {
                         horizontal: 2,
@@ -517,7 +774,7 @@ fn render_night(
                 if let Some(action) = agent.selected_action().cloned() {
                     if action == selected_event.action() {
                         frame.render_widget(
-                            Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone())
+                            Paragraph::new(cards[CARD_ANIMATION_FRAMES - 1].clone())
                                 .block(Block::bordered().border_style(border_style)),
                             cards_split[i].inner(&Margin {
                                 horizontal: 1,
@@ -542,7 +799,7 @@ fn render_night(
                 } else {
                     if ui_options.selected_event_card_index == i {
                         frame.render_widget(
-                            Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone())
+                            Paragraph::new(cards[CARD_ANIMATION_FRAMES - 1].clone())
                                 .block(Block::bordered().border_style(border_style)),
                             cards_split[i].inner(&Margin {
                                 horizontal: 1,
@@ -557,7 +814,7 @@ fn render_night(
                         );
                     } else {
                         frame.render_widget(
-                            Paragraph::new(STONKS_CARDS[STONKS_CARDS.len() - 1].clone()),
+                            Paragraph::new(cards[CARD_ANIMATION_FRAMES - 1].clone()),
                             cards_split[i].inner(&Margin {
                                 horizontal: 2,
                                 vertical: 1,
@@ -620,14 +877,17 @@ fn render_night(
     Ok(())
 }
 
-fn render_stonk(
+pub(crate) fn render_stonk(
     frame: &mut Frame,
     market: &Market,
     agent: &UserAgent,
     ui_options: &UiOptions,
-    stonk: &Stonk,
     area: Rect,
 ) -> AppResult<()> {
+    let stonk_id = ui_options
+        .focus_on_stonk
+        .expect("Focus_on_stonk should be some.");
+    let stonk = &market.stonks[stonk_id];
     let styles = vec![
         Style::default().cyan(),
         Style::default().magenta(),
@@ -978,4 +1238,67 @@ pub fn render(
     render_footer(frame, market, agent, ui_options, split[2]);
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DOGE_CARDS, ELON_CARDS, STONKS_CARDS};
+    use crate::utils::AppResult;
+    use ratatui::{
+        backend::CrosstermBackend,
+        layout::{Layout, Margin},
+        widgets::Paragraph,
+        Terminal,
+    };
+    use std::{thread, time::Duration};
+
+    #[test]
+    fn test_card_animation() -> AppResult<()> {
+        // create crossterm terminal to stdout
+        let backend = CrosstermBackend::new(std::io::stdout());
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        let mut idx = 0;
+
+        let stonks = STONKS_CARDS.clone();
+        let doge = DOGE_CARDS.clone();
+        let elon = ELON_CARDS.clone();
+        let rate = 2;
+        loop {
+            if idx == stonks.len() * rate {
+                break;
+            }
+
+            thread::sleep(Duration::from_millis(50));
+            terminal.draw(|frame| {
+                let area = frame.size();
+
+                let split = Layout::horizontal([32, 32, 32]).split(area);
+                frame.render_widget(
+                    Paragraph::new(stonks[idx / rate].clone()),
+                    split[0].inner(&Margin {
+                        horizontal: 1,
+                        vertical: 1,
+                    }),
+                );
+                frame.render_widget(
+                    Paragraph::new(doge[idx / rate].clone()),
+                    split[1].inner(&Margin {
+                        horizontal: 1,
+                        vertical: 1,
+                    }),
+                );
+                frame.render_widget(
+                    Paragraph::new(elon[idx / rate].clone()),
+                    split[2].inner(&Margin {
+                        horizontal: 1,
+                        vertical: 1,
+                    }),
+                );
+            })?;
+
+            idx += 1;
+        }
+        Ok(())
+    }
 }

@@ -4,6 +4,7 @@ use crate::stonk::Stonk;
 use crossterm::event::{
     Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
+use image::imageops::resize;
 use image::io::Reader as ImageReader;
 use image::{Pixel, RgbaImage};
 use include_dir::{include_dir, Dir};
@@ -20,7 +21,7 @@ static ASSETS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/assets/");
 static AGENTS_STORE_FILENAME: &'static str = "agents.json";
 static MARKET_STORE_FILENAME: &'static str = "market.json";
 
-fn read_image(path: &str) -> AppResult<RgbaImage> {
+pub fn read_image(path: &str) -> AppResult<RgbaImage> {
     let file = ASSETS_DIR.get_file(path);
     if file.is_none() {
         return Err(format!("File {} not found", path).into());
@@ -32,18 +33,26 @@ fn read_image(path: &str) -> AppResult<RgbaImage> {
     Ok(img)
 }
 
-pub fn img_to_lines<'a>(path: &str) -> AppResult<Vec<Line<'a>>> {
-    let img = read_image(path)?;
+pub fn resize_image(image: &RgbaImage, nwidth: u32, nheight: u32) -> AppResult<RgbaImage> {
+    Ok(resize(
+        image,
+        nwidth,
+        nheight,
+        image::imageops::FilterType::Triangle,
+    ))
+}
+
+pub fn img_to_lines<'a>(image: &RgbaImage) -> AppResult<Vec<Line<'a>>> {
     let mut lines: Vec<Line> = vec![];
-    let width = img.width();
-    let height = img.height();
+    let width = image.width();
+    let height = image.height();
 
     for y in (0..height - 1).step_by(2) {
         let mut line: Vec<Span> = vec![];
 
         for x in 0..width {
-            let top_pixel = img.get_pixel(x, y).to_rgba();
-            let btm_pixel = img.get_pixel(x, y + 1).to_rgba();
+            let top_pixel = image.get_pixel(x, y).to_rgba();
+            let btm_pixel = image.get_pixel(x, y + 1).to_rgba();
             if top_pixel[3] == 0 && btm_pixel[3] == 0 {
                 line.push(Span::raw(" "));
                 continue;
@@ -74,7 +83,7 @@ pub fn img_to_lines<'a>(path: &str) -> AppResult<Vec<Line<'a>>> {
     if height % 2 == 1 {
         let mut line: Vec<Span> = vec![];
         for x in 0..width {
-            let top_pixel = img.get_pixel(x, height - 1).to_rgba();
+            let top_pixel = image.get_pixel(x, height - 1).to_rgba();
             if top_pixel[3] == 0 {
                 line.push(Span::raw(" "));
                 continue;

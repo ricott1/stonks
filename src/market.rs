@@ -29,8 +29,9 @@ pub const NUMBER_OF_STONKS: usize = 8;
 
 const BRIBE_AMOUNT: u32 = 10_000 * 100;
 
-const MAX_MEAN_GLOBAL_DRIFT: f64 = 0.25;
-const GLOBAL_DRIFT_VOLATILITY: f64 = 0.05;
+const MAX_GLOBAL_DRIFT: f64 = 0.25;
+const GLOBAL_DRIFT_VOLATILITY: f64 = 0.005;
+const GLOBAL_DRIFT_INTERVAL: usize = 7 * DAY_LENGTH;
 
 #[derive(Debug, Clone, Copy, Display, EnumIter)]
 enum Season {
@@ -191,13 +192,13 @@ impl Market {
     }
 
     pub fn tick_day(&mut self, rng: &mut ChaCha8Rng) {
-        let global_drift = if self.last_tick % (7 * DAY_LENGTH) == 0 {
+        let global_drift = if self.last_tick % GLOBAL_DRIFT_INTERVAL == 0 {
             let current_market_cap = self.total_market_cap() as f64;
-            let mean = ((self.target_total_market_cap as f64 - current_market_cap)
-                / current_market_cap.min(self.target_total_market_cap as f64))
-            .min(MAX_MEAN_GLOBAL_DRIFT)
-            .max(-MAX_MEAN_GLOBAL_DRIFT);
-            let drift = mean + rng.gen_range(-GLOBAL_DRIFT_VOLATILITY..GLOBAL_DRIFT_VOLATILITY);
+            let mean = (self.target_total_market_cap as f64 - current_market_cap)
+                / current_market_cap.min(self.target_total_market_cap as f64);
+            let drift = (mean + rng.gen_range(-GLOBAL_DRIFT_VOLATILITY..GLOBAL_DRIFT_VOLATILITY))
+                .min(MAX_GLOBAL_DRIFT)
+                .max(-MAX_GLOBAL_DRIFT);
 
             info!(
                 "Global drift: current cap {}, target cap {}, global drift {}",
@@ -212,7 +213,7 @@ impl Market {
             if let Some(drift) = global_drift {
                 stonk.add_condition(
                     StonkCondition::Bump { amount: drift },
-                    self.last_tick + 7 * DAY_LENGTH,
+                    self.last_tick + GLOBAL_DRIFT_INTERVAL,
                 );
             }
             stonk.tick(self.last_tick);
@@ -341,10 +342,7 @@ impl Market {
                             self.last_tick + DAY_LENGTH,
                         );
                         stonk.add_condition(
-                            StonkCondition::SetShockProbability {
-                                value: 0.25,
-                                previous_shock_probability: stonk.shock_probability,
-                            },
+                            StonkCondition::IncreasedShockProbability,
                             self.last_tick + DAY_LENGTH,
                         )
                     }
@@ -378,10 +376,7 @@ impl Market {
                                 self.last_tick + DAY_LENGTH,
                             );
                             stonk.add_condition(
-                                StonkCondition::SetShockProbability {
-                                    value: (stonk.shock_probability * 4.0).min(1.0),
-                                    previous_shock_probability: stonk.shock_probability,
-                                },
+                                StonkCondition::IncreasedShockProbability,
                                 self.last_tick + DAY_LENGTH,
                             );
                         }
@@ -414,6 +409,82 @@ impl Market {
                 }
             }
             agent.insert_past_selected_actions(action.clone(), self.last_tick);
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Market, HISTORICAL_SIZE};
+    use crate::{
+        agent::{DecisionAgent, UserAgent},
+        ssh_client::SessionAuth,
+        ui::{render_stonk, UiOptions, ZoomLevel},
+        utils::AppResult,
+    };
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha8Rng;
+    use ratatui::{backend::CrosstermBackend, Terminal};
+    use std::{thread, time::Duration};
+
+    #[test]
+    fn test_market() -> AppResult<()> {
+        let mut market = Market::new();
+
+        let price_per_share_in_cents = 50 * 100;
+        let number_of_shares = 10_000;
+        let drift = 0.0;
+        let drift_volatility = 0.0002;
+        let shock_probability = 0.05;
+        let volatility = 0.00005;
+
+        for stonk in market.stonks.iter_mut() {
+            stonk.set_test_values(
+                price_per_share_in_cents,
+                number_of_shares,
+                drift,
+                drift_volatility,
+                volatility,
+                shock_probability,
+            );
+        }
+
+        let rng = &mut ChaCha8Rng::from_entropy();
+        while market.last_tick < HISTORICAL_SIZE {
+            market.tick_day(rng)
+        }
+
+        let mut agent = UserAgent::new(SessionAuth::default());
+        agent.add_condition(
+            crate::agent::AgentCondition::UltraVision,
+            market.last_tick + 1,
+        );
+        let mut ui_options = UiOptions::new();
+        ui_options.focus_on_stonk = Some(0);
+        ui_options.zoom_level = ZoomLevel::Max;
+
+        // create crossterm terminal to stdout
+        let backend = CrosstermBackend::new(std::io::stdout());
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        let mut idx = 0;
+        loop {
+            thread::sleep(Duration::from_millis(1000));
+            ui_options.focus_on_stonk = Some(idx % market.stonks.len());
+            terminal.draw(|frame| {
+                let area = frame.size();
+                render_stonk(frame, &market, &agent, &ui_options, area)
+                    .expect("Failed to render stonk");
+            })?;
+
+            // if idx > 1 && idx % market.stonks.len() == 0 {
+            //     ui_options.zoom_level = ui_options.zoom_level.next();
+            // }
+            if idx == market.stonks.len() * (ZoomLevel::Max as usize + 1) {
+                break;
+            }
+            idx += 1;
         }
         Ok(())
     }
