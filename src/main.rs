@@ -1,7 +1,15 @@
 use clap::{ArgAction, Parser};
-use stonks::{ssh_server::AppServer, utils::AppResult};
-use tracing::metadata::LevelFilter;
-use tracing_subscriber::EnvFilter;
+use log::LevelFilter;
+use log4rs::{
+    append::file::FileAppender,
+    config::{Appender, Root},
+    encode::pattern::PatternEncoder,
+    Config,
+};
+use stonks::{
+    ssh::AppServer,
+    utils::{store_path, AppResult},
+};
 
 const DEFAULT_SERVER_SSH_PORT: u16 = 3333;
 
@@ -18,16 +26,22 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> AppResult<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::default().add_directive(LevelFilter::INFO.into()))
-        .with_line_number(true)
-        .with_file(true)
-        .init();
+    let logfile_path = store_path("minotaur.log")?;
+    let logfile = FileAppender::builder()
+        .append(false)
+        .encoder(Box::new(PatternEncoder::new("{l} - {m}\n")))
+        .build(logfile_path)?;
+
+    let config = Config::builder()
+        .appender(Appender::builder().build("logfile", Box::new(logfile)))
+        .build(Root::builder().appender("logfile").build(LevelFilter::Info))?;
+
+    log4rs::init_config(config)?;
 
     let args = Args::parse();
-
     let port = args.port.unwrap_or(DEFAULT_SERVER_SSH_PORT);
-    AppServer::new(args.reset, args.seed)?.run(port).await?;
+    let mut game_server = AppServer::new(port)?;
+    game_server.run(args.reset, args.seed).await?;
 
     Ok(())
 }
