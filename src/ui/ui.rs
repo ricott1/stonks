@@ -8,7 +8,7 @@ use once_cell::sync::Lazy;
 use ratatui::layout::{Constraint, Margin, Rect};
 use ratatui::style::palette::tailwind;
 use ratatui::style::{Color, Modifier, Style, Stylize};
-use ratatui::symbols;
+use ratatui::symbols::{self, border};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{
     Axis, Block, Borders, Cell, Chart, Dataset, GraphType, HighlightSpacing, Paragraph, Row, Table,
@@ -281,6 +281,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
                         Line::from(format!("{} {:.03}%", agent.username(), agent_share))
                             .style(agent_style)
                     } else {
+                        println!("Unknown agent: {}", holder_id);
                         Line::from("Unknown")
                     }
                 })
@@ -383,7 +384,7 @@ fn render_day(
         let colors = TableColors::new(&PALETTES[ui_options.palette_index]);
         let table = build_stonks_table(market, agent, colors);
         frame.render_stateful_widget(
-            table,
+            table.block(Block::default().border_set(border::PROPORTIONAL_WIDE)),
             area,
             &mut TableState::default().with_selected(Some(ui_options.selected_stonk_index)),
         );
@@ -761,13 +762,7 @@ fn render_header(
     frame.render_widget(Paragraph::new(header_text), area);
 }
 
-fn render_stonk_info(
-    frame: &mut Frame,
-    market: &Market,
-    _agent: &UserAgent,
-    ui_options: &UiOptions,
-    area: Rect,
-) {
+fn render_stonk_info(frame: &mut Frame, market: &Market, ui_options: &UiOptions, area: Rect) {
     let stonk_id = if let Some(stonk_id) = ui_options.focus_on_stonk {
         stonk_id
     } else {
@@ -897,7 +892,7 @@ pub fn render(
         agent,
         ui_options,
         number_of_players,
-        split[0],
+        split[0].inner(Margin::new(1, 0)),
     );
 
     match ui_options.display {
@@ -910,7 +905,12 @@ pub fn render(
                 ])
                 .split(split[1]);
                 render_day(frame, market, agent, ui_options, sub_split[0])?;
-                render_stonk_info(frame, market, agent, ui_options, sub_split[1]);
+                render_stonk_info(
+                    frame,
+                    market,
+                    ui_options,
+                    sub_split[1].inner(Margin::new(1, 0)),
+                );
             }
             GamePhase::Night { counter, .. } => {
                 render_night(frame, market, counter, agent, ui_options, split[1])?
@@ -918,7 +918,13 @@ pub fn render(
         },
     }
 
-    render_footer(frame, market, agent, ui_options, split[2]);
+    render_footer(
+        frame,
+        market,
+        agent,
+        ui_options,
+        split[2].inner(Margin::new(1, 0)),
+    );
 
     Ok(())
 }

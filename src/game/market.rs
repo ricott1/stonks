@@ -102,6 +102,7 @@ impl GamePhase {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Market {
+    #[serde(skip)]
     pub agents: HashMap<AgentId, UserAgent>,
     #[serde(skip)]
     pub online_agents: HashSet<AgentId>,

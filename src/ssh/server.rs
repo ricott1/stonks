@@ -3,7 +3,7 @@ use crate::game::agent::UserAgent;
 use crate::game::market::{GamePhase, Market};
 use crate::ssh::TerminalEvent;
 use crate::tui::Tui;
-use crate::utils::{load_market, save_agent, save_market, AgentId, AppResult};
+use crate::utils::{delete_all_data, load_market, save_agent, save_market, AgentId, AppResult};
 use crossterm::event::KeyCode;
 use itertools::Either;
 use log::info;
@@ -132,7 +132,15 @@ impl AppServer {
             const DRAW_TIME_STEP: Duration = Duration::from_millis(25);
             const UPDATE_TIME_STEP: Duration = Duration::from_millis(1000);
 
-            let mut market = if reset {
+            if reset {
+                info!("Resetting storage");
+                delete_all_data().expect("Could not delete data");
+            }
+
+            let mut market = if let Ok(m) = load_market() {
+                info!("Loading market. Starting back from {:#?}", m.phase);
+                m
+            } else {
                 info!("Creating new market from scratch");
                 let mut m = Market::default();
                 let rng = &mut ChaCha8Rng::seed_from_u64(
@@ -140,11 +148,6 @@ impl AppServer {
                 );
                 m.initialize(rng);
                 save_market(&m).expect("Could not save market");
-                m
-            } else {
-                let m = load_market().expect("Could not load market");
-                info!("Loading market. Starting back from {:#?}", m.phase);
-
                 m
             };
             let mut tuis: HashMap<AgentId, Tui> = HashMap::new();

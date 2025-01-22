@@ -183,6 +183,8 @@ impl Handler for AppClient {
     ) -> AppResult<()> {
         println!("Client requested pty");
         let stdin = self.channel_mut(channel_id)?.pty_request().await?;
+
+        println!("Got stdin");
         let client_shutdown = CancellationToken::new();
 
         SSHEventHandler::start(

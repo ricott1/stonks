@@ -71,6 +71,23 @@ pub fn save_agent(agent: &UserAgent) -> AppResult<()> {
     Ok(())
 }
 
+pub fn delete_all_data() -> AppResult<()> {
+    let dirs = directories::ProjectDirs::from("org", "frittura", "stonks")
+        .ok_or(anyhow!("Failed to get directories"))?;
+    let config_dirs = dirs.config_dir();
+    if !config_dirs.exists() {
+        return Ok(());
+    }
+    for entry in std::fs::read_dir(config_dirs)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_file() {
+            std::fs::remove_file(path)?;
+        }
+    }
+    Ok(())
+}
+
 pub fn save_market(market: &Market) -> AppResult<()> {
     save_to_json(store_path(MARKET_STORE_FILENAME)?, market)?;
     Ok(())

@@ -13,6 +13,8 @@ const CARD_ANIMATION_FRAMES: usize = NO_ANIMATION_FRAMES + CARD_WIDTH as usize +
 static STONKS_CARDS: Lazy<Vec<Vec<Line>>> = Lazy::new(|| image_to_cards("images/stonks.png"));
 static DOGE_CARDS: Lazy<Vec<Vec<Line>>> = Lazy::new(|| image_to_cards("images/doge.png"));
 static ELON_CARDS: Lazy<Vec<Vec<Line>>> = Lazy::new(|| image_to_cards("images/elon.png"));
+
+#[allow(dead_code)]
 static KIM_CARDS: Lazy<Vec<Vec<Line>>> = Lazy::new(|| image_to_cards("images/kim.png"));
 
 pub static UNSELECTED_CARD: Lazy<Vec<Line>> = Lazy::new(|| {
