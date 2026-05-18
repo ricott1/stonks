@@ -1,5 +1,4 @@
 use crate::game::market::Market;
-use crate::ssh::SSHWriterProxy;
 use crate::ui;
 use crate::utils::{AgentId, AppResult};
 use ratatui::crossterm;
@@ -12,6 +11,7 @@ use ratatui::prelude::CrosstermBackend;
 use ratatui::Terminal;
 use ratatui::TerminalOptions;
 use ratatui::Viewport;
+use sshhub::core::SSHWriterProxy;
 
 pub const UI_SCREEN_SIZE: (u16, u16) = (160, 50);
 
@@ -78,18 +78,18 @@ impl Tui {
         })?;
         Ok(())
     }
+}
 
-    pub async fn exit(&mut self) -> AppResult<()> {
-        crossterm::execute!(
-            self.terminal.backend_mut(),
+impl Drop for Tui {
+    fn drop(&mut self) {
+        let backend = self.terminal.backend_mut();
+        let _ = crossterm::execute!(
+            backend,
             LeaveAlternateScreen,
             DisableMouseCapture,
             Clear(crossterm::terminal::ClearType::All),
             Show
-        )?;
-
-        self.terminal.backend_mut().writer_mut().send().await?;
-
-        Ok(())
+        );
+        backend.writer_mut().send_in_background();
     }
 }

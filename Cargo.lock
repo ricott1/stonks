@@ -3608,6 +3608,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sshhub"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "crossterm",
+ "log",
+ "rand 0.10.1",
+ "ratatui",
+ "russh",
+ "tokio",
+]
+
+[[package]]
 name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3626,7 +3639,6 @@ dependencies = [
  "anyhow",
  "clap",
  "directories",
- "futures",
  "image",
  "include_dir",
  "itertools",
@@ -3641,6 +3653,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.8",
+ "sshhub",
  "strum 0.28.0",
  "strum_macros 0.28.0",
  "tokio",
