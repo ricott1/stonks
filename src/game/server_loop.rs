@@ -90,17 +90,12 @@ pub fn spawn(
                 Some((client_id, event)) = terminal_event_receiver.recv() => {
                     match event {
                         TerminalEvent::Key(key_event) => {
-                            match key_event.code {
-                                KeyCode::Char('q') | KeyCode::Esc => {
-                                    remove_agent(&mut market, &mut tuis, client_id);
-                                }
-                                _ => {
-                                    if let Some(agent) = market.agents.get_mut(&client_id) {
-                                        agent.update_last_active_time();
-                                        agent.handle_key_events(key_event, market.phase, &market.stonks);
-                                        save_agent(agent).expect("Could not save agent");
-                                    }
-                                }
+                            if key_event.code == KeyCode::Esc {
+                                remove_agent(&mut market, &mut tuis, client_id);
+                            } else if let Some(agent) = market.agents.get_mut(&client_id) {
+                                agent.update_last_active_time();
+                                agent.handle_key_events(key_event, market.phase, &market.stonks);
+                                save_agent(agent).expect("Could not save agent");
                             }
                         }
                         TerminalEvent::Quit => {

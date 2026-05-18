@@ -90,6 +90,6 @@ impl Drop for Tui {
             Clear(crossterm::terminal::ClearType::All),
             Show
         );
-        backend.writer_mut().send_in_background();
+        backend.writer_mut().send_and_close_in_background();
     }
 }
