@@ -7,11 +7,11 @@ use super::{
 };
 use crate::{
     game::events::NightEvent,
-    utils::{load_stonks_data, AgentId, AppResult},
+    utils::{fresh_chacha_rng, load_stonks_data, AgentId, AppResult},
 };
 use anyhow::anyhow;
 use log::{debug, info};
-use rand::{seq::SliceRandom, Rng, SeedableRng};
+use rand::{seq::SliceRandom, RngExt};
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, IntoEnumIterator};
@@ -190,7 +190,7 @@ impl Market {
     pub fn total_market_cap(&self) -> u64 {
         self.stonks
             .iter()
-            .map(|stonk| stonk.market_cap_cents() as u64)
+            .map(|stonk| stonk.market_cap_cents())
             .sum::<u64>()
     }
 
@@ -224,13 +224,12 @@ impl Market {
     }
 
     pub fn tick_day(&mut self, rng: &mut ChaCha8Rng) {
-        let global_drift = if self.last_tick % GLOBAL_DRIFT_INTERVAL == 0 {
+        let global_drift = if self.last_tick.is_multiple_of(GLOBAL_DRIFT_INTERVAL) {
             let current_market_cap = self.total_market_cap() as f64;
             let mean = (self.target_total_market_cap as f64 - current_market_cap)
                 / current_market_cap.min(self.target_total_market_cap as f64);
-            let drift = (mean + rng.gen_range(-GLOBAL_DRIFT_VOLATILITY..GLOBAL_DRIFT_VOLATILITY))
-                .min(MAX_GLOBAL_DRIFT)
-                .max(-MAX_GLOBAL_DRIFT);
+            let drift = (mean + rng.random_range(-GLOBAL_DRIFT_VOLATILITY..GLOBAL_DRIFT_VOLATILITY))
+                .clamp(-MAX_GLOBAL_DRIFT, MAX_GLOBAL_DRIFT);
 
             info!(
                 "Global drift: current cap {}, target cap {}, global drift {}",
@@ -271,7 +270,7 @@ impl Market {
                 stonk.allocated_shares
             );
         }
-        let rng = &mut ChaCha8Rng::from_entropy();
+        let rng = &mut fresh_chacha_rng();
         match self.phase {
             GamePhase::Day { cycle, counter } => {
                 self.tick_day(rng);
@@ -337,20 +336,11 @@ impl Market {
         // CrashAgentStonks actions are handled first
         let crash_agent_targets = self
             .agents
-            .iter()
-            .map(|(_, agent)| {
-                if let Some(action) = agent.selected_action() {
-                    if let AgentAction::CrashAgentStonks { agent_id } = action {
-                        Some(agent_id)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
+            .values()
+            .filter_map(|agent| match agent.selected_action() {
+                Some(AgentAction::CrashAgentStonks { agent_id }) => Some(*agent_id),
+                _ => None,
             })
-            .filter(|a| a.is_some())
-            .map(|a| a.copied().unwrap())
             .collect::<Vec<AgentId>>();
 
         for target_id in crash_agent_targets {
@@ -513,7 +503,7 @@ impl Market {
                 GamePhase::Night { .. } => {
                     // At the beginning of the night, set the available events.
                     // We set them here because we need the market data.
-                    if agent.render_counter() == 0 && agent.available_night_events().len() == 0 {
+                    if agent.render_counter() == 0 && agent.available_night_events().is_empty() {
                         let mut events = NightEvent::iter()
                             .filter(|e| {
                                 match e {
@@ -526,7 +516,7 @@ impl Market {
                             .collect::<Vec<NightEvent>>();
 
                         for event in character_assassination_events.iter() {
-                            if event.unlock_condition()(agent, &self.stonks) == true {
+                            if event.unlock_condition()(agent, &self.stonks) {
                                 events.push(event.clone());
                             }
                         }
@@ -534,17 +524,16 @@ impl Market {
                         // Add ReceiveDividends events for each stonk
                         for stonk in self.stonks.iter() {
                             let event = NightEvent::ReceiveDividends { stonk_id: stonk.id };
-                            if event.unlock_condition()(agent, &self.stonks) == true {
+                            if event.unlock_condition()(agent, &self.stonks) {
                                 events.push(event.clone());
                             }
                         }
 
                         info!("Got events {:#?}", events);
-                        events.shuffle(&mut rand::thread_rng());
+                        events.shuffle(&mut rand::rng());
                         events = events
                             .iter()
-                            .take(MAX_EVENTS_PER_NIGHT)
-                            .map(|e| e.clone())
+                            .take(MAX_EVENTS_PER_NIGHT).cloned()
                             .collect::<Vec<NightEvent>>();
 
                         agent.clear_action();
@@ -593,7 +582,7 @@ mod tests {
             );
         }
 
-        let rng = &mut ChaCha8Rng::from_entropy();
+        let rng = &mut fresh_chacha_rng();
         while market.last_tick < HISTORICAL_SIZE {
             market.tick_day(rng)
         }

@@ -7,7 +7,7 @@ use log4rs::{
     Config,
 };
 use stonks::{
-    ssh::AppServer,
+    game::ssh_game::StonksGame,
     utils::{store_path, AppResult},
 };
 
@@ -16,17 +16,17 @@ const DEFAULT_SERVER_SSH_PORT: u16 = 3333;
 #[derive(Parser, Debug)]
 #[clap(name="Stonks", about = "Get rich or stonk tryin'", author, version, long_about = None)]
 struct Args {
-    #[clap(long, short = 's', action=ArgAction::Set, help = "Set random seed")]
+    #[clap(long, short = 's', action = ArgAction::Set, help = "Set random seed")]
     seed: Option<u64>,
-    #[clap(long, short = 'p', action=ArgAction::Set, help = "Set SSH server port")]
+    #[clap(long, short = 'p', action = ArgAction::Set, help = "Set SSH server port")]
     port: Option<u16>,
-    #[clap(long, short='r', action=ArgAction::SetTrue, help = "Reset storage")]
+    #[clap(long, short = 'r', action = ArgAction::SetTrue, help = "Reset storage")]
     reset: bool,
 }
 
 #[tokio::main]
 async fn main() -> AppResult<()> {
-    let logfile_path = store_path("minotaur.log")?;
+    let logfile_path = store_path("stonks.log")?;
     let logfile = FileAppender::builder()
         .append(false)
         .encoder(Box::new(PatternEncoder::new("{l} - {m}\n")))
@@ -40,8 +40,9 @@ async fn main() -> AppResult<()> {
 
     let args = Args::parse();
     let port = args.port.unwrap_or(DEFAULT_SERVER_SSH_PORT);
-    let mut game_server = AppServer::new(port)?;
-    game_server.run(args.reset, args.seed).await?;
+
+    let game = StonksGame::new(args.reset, args.seed);
+    frittura_ssh_core::run_server(game, port).await?;
 
     Ok(())
 }

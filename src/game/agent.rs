@@ -9,7 +9,8 @@ use crate::{
     utils::{AgentId, AppResult},
 };
 use anyhow::anyhow;
-use crossterm::event::{KeyCode, KeyEvent};
+use ratatui::crossterm;
+use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, time::SystemTime};
 use strum::Display;
@@ -161,7 +162,7 @@ impl UserAgent {
         match key_event.code {
             crossterm::event::KeyCode::Enter => match market_phase {
                 GamePhase::Day { .. } => {
-                    if let Some(_) = self.ui_options.focus_on_stonk {
+                    if self.ui_options.focus_on_stonk.is_some() {
                         self.ui_options.reset();
                     } else {
                         self.ui_options.select_stonk();

@@ -5,7 +5,7 @@ use super::{
     market::{Market, DAY_LENGTH, NUMBER_OF_STONKS},
     stonk::{DollarValue, Stonk, StonkClass},
 };
-use rand::Rng;
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum::Display;
@@ -164,7 +164,7 @@ impl NightEvent {
         };
 
         let unlock_description = self.unlock_condition_description();
-        if unlock_description.len() > 0 {
+        if !unlock_description.is_empty() {
             description.push("".to_string());
             description.push("Unlock Condition:".to_string());
             for l in unlock_description.iter() {
@@ -173,7 +173,7 @@ impl NightEvent {
         }
 
         let cost_description = self.cost_description();
-        if cost_description.len() > 0 {
+        if !cost_description.is_empty() {
             description.push("".to_string());
             description.push("Cost:".to_string());
             for l in cost_description.iter() {
@@ -184,6 +184,7 @@ impl NightEvent {
         description
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn unlock_condition(
         &self,
     ) -> Box<dyn Fn(&dyn DecisionAgent, &[Stonk; NUMBER_OF_STONKS]) -> bool> {
@@ -203,8 +204,8 @@ impl NightEvent {
                     / war_stonks.len() as f64
                     >= 1.0
                     && {
-                        let rng = &mut rand::thread_rng();
-                        rng.gen_bool(unlock_probability)
+                        let rng = &mut rand::rng();
+                        rng.random_bool(unlock_probability)
                     }
             }),
             Self::ColdWinter => Box::new(move |agent, stonks| {
@@ -220,8 +221,8 @@ impl NightEvent {
                     / commodity_stonks.len() as f64
                     >= 1.0
                     && {
-                        let rng = &mut rand::thread_rng();
-                        rng.gen_bool(unlock_probability)
+                        let rng = &mut rand::rng();
+                        rng.random_bool(unlock_probability)
                     }
             }),
             Self::RoyalScandal => Box::new(move |agent, stonks| {
@@ -237,8 +238,8 @@ impl NightEvent {
                     / media_stonks.len() as f64
                     >= 1.0
                     && {
-                        let rng = &mut rand::thread_rng();
-                        rng.gen_bool(unlock_probability)
+                        let rng = &mut rand::rng();
+                        rng.random_bool(unlock_probability)
                     }
             }),
             Self::PurpleBlockchain => Box::new(move |agent, stonks| {
@@ -254,26 +255,26 @@ impl NightEvent {
                     / tech_stonks.len() as f64
                     >= 1.0
                     && {
-                        let rng = &mut rand::thread_rng();
-                        rng.gen_bool(unlock_probability)
+                        let rng = &mut rand::rng();
+                        rng.random_bool(unlock_probability)
                     }
             }),
             Self::MarketCrash => Box::new(move |agent, _| {
                 agent.cash() >= MARKET_CRASH_PREREQUISITE && {
-                    let rng = &mut rand::thread_rng();
-                    rng.gen_bool(unlock_probability)
+                    let rng = &mut rand::rng();
+                    rng.random_bool(unlock_probability)
                 }
             }),
             Self::UltraVision => Box::new(move |agent, stonks| {
                 let riccardino_id = 3;
                 let riccardino = &stonks[riccardino_id];
                 100.0 * riccardino.to_stake(agent.owned_stonks()[riccardino_id]) >= 10.0 && {
-                    let rng = &mut rand::thread_rng();
-                    rng.gen_bool(unlock_probability)
+                    let rng = &mut rand::rng();
+                    rng.random_bool(unlock_probability)
                 }
             }),
             Self::CharacterAssassination { agent_id, .. } => {
-                let agent_id = agent_id.clone();
+                let agent_id = *agent_id;
                 Box::new(move |agent, _| {
                     // let has_any_large_stake = agent_stonks
                     //     .iter()
@@ -281,8 +282,8 @@ impl NightEvent {
                     //     .map(|(stonk_id, &amount)| 100.0 * market.stonks[stonk_id].to_stake(amount))
                     //     .any(|s| s > 5.0);
                     agent_id != agent.id() && agent.cash() > CHARACTER_ASSASSINATION_COST && {
-                        let rng = &mut rand::thread_rng();
-                        rng.gen_bool(unlock_probability)
+                        let rng = &mut rand::rng();
+                        rng.random_bool(unlock_probability)
                     }
                     // && has_any_large_stake
                 })
@@ -294,18 +295,18 @@ impl NightEvent {
                     .is_none()
                     && agent.cash() < 1_000 * 100
                     && {
-                        let rng = &mut rand::thread_rng();
-                        rng.gen_bool(unlock_probability)
+                        let rng = &mut rand::rng();
+                        rng.random_bool(unlock_probability)
                     }
             }),
             Self::LuckyNight => Box::new(move |agent, _| {
                 agent.cash() < 2_000 * 100 && {
-                    let rng = &mut rand::thread_rng();
-                    rng.gen_bool(unlock_probability)
+                    let rng = &mut rand::rng();
+                    rng.random_bool(unlock_probability)
                 }
             }),
             Self::ReceiveDividends { stonk_id } => {
-                let stonk_id = stonk_id.clone();
+                let stonk_id = *stonk_id;
                 Box::new(move |agent, stonks| {
                     if agent.owned_stonks()[stonk_id] == 0 {
                         return false;
@@ -327,8 +328,8 @@ impl NightEvent {
                         return false;
                     }
 
-                    let rng = &mut rand::thread_rng();
-                    rng.gen_bool(unlock_probability)
+                    let rng = &mut rand::rng();
+                    rng.random_bool(unlock_probability)
                 })
             }
         }

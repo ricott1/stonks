@@ -1,7 +1,7 @@
 use crate::utils::{AgentId, AppResult};
 use anyhow::anyhow;
 use log::{debug, info};
-use rand::Rng;
+use rand::RngExt;
 use rand_distr::{Cauchy, Distribution, Normal};
 use serde::{Deserialize, Serialize};
 
@@ -195,7 +195,7 @@ impl Stonk {
     pub fn tick(&mut self, current_tick: usize) {
         self.apply_conditions(current_tick);
 
-        let rng = &mut rand::thread_rng();
+        let rng = &mut rand::rng();
         let shock_probability = if self
             .conditions
             .iter()
@@ -205,7 +205,7 @@ impl Stonk {
         } else {
             self.shock_probability
         };
-        let price_drift = if rng.gen_bool(shock_probability) {
+        let price_drift = if rng.random_bool(shock_probability) {
             Cauchy::new(self.drift, self.volatility)
                 .expect("Failed to sample tick distribution")
                 .sample(rng)
@@ -216,8 +216,7 @@ impl Stonk {
                         .expect("Failed to sample tick distribution")
                         .sample(rng)
         }
-        .min(MAX_PRICE_DRIFT)
-        .max(-MAX_PRICE_DRIFT);
+        .clamp(-MAX_PRICE_DRIFT, MAX_PRICE_DRIFT);
 
         self.price_per_share_in_cents = ((self.price_per_share_in_cents as f64
             * (1.0 + price_drift)) as u32)
