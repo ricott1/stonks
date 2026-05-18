@@ -11,7 +11,7 @@ use log::info;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use ratatui::crossterm::event::KeyCode;
-use sshhub::core::TerminalEvent;
+use frittura_ssh_core::TerminalEvent;
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::select;

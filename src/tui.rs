@@ -11,7 +11,7 @@ use ratatui::prelude::CrosstermBackend;
 use ratatui::Terminal;
 use ratatui::TerminalOptions;
 use ratatui::Viewport;
-use sshhub::core::SSHWriterProxy;
+use frittura_ssh_core::SSHWriterProxy;
 
 pub const UI_SCREEN_SIZE: (u16, u16) = (160, 50);
 

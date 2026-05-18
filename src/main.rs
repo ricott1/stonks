@@ -42,7 +42,7 @@ async fn main() -> AppResult<()> {
     let port = args.port.unwrap_or(DEFAULT_SERVER_SSH_PORT);
 
     let game = StonksGame::new(args.reset, args.seed);
-    sshhub::core::run_server(game, port).await?;
+    frittura_ssh_core::run_server(game, port).await?;
 
     Ok(())
 }

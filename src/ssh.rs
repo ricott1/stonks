@@ -1,5 +1,5 @@
 //! Stonks-specific SSH-auth constants and helpers. The SSH server runtime
-//! itself comes from `sshhub::core`; this module just holds the bits that
+//! itself comes from `frittura_ssh_core`; this module just holds the bits that
 //! identify a user's save (salts, username length rules, the hashed
 //! `Password` type).
 

@@ -1,4 +1,4 @@
-//! Glue between sshhub's `SshGame` trait and stonks's central game task.
+//! Glue between `frittura-ssh-core`'s `SshGame` trait and stonks's central game task.
 //! Owns the `mpsc::Sender`s into the central task; each new SSH session
 //! authenticates against the on-disk save and forwards events.
 
@@ -12,7 +12,7 @@ use crate::tui::Tui;
 use crate::utils::{load_agent, save_agent, AgentId};
 use anyhow::anyhow;
 use sha2::{Digest, Sha256};
-use sshhub::core::{spawn_event_converter, Credential, SshGame, SshSession, TerminalEvent};
+use frittura_ssh_core::{spawn_event_converter, Credential, SshGame, SshSession, TerminalEvent};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -24,7 +24,7 @@ pub struct StonksGame {
 
 impl StonksGame {
     /// Construct the game + spawn the central market loop. Returns an
-    /// `Arc<Self>` ready to hand to `sshhub::core::run_server`.
+    /// `Arc<Self>` ready to hand to `frittura_ssh_core::run_server`.
     pub fn new(reset: bool, seed: Option<u64>) -> Arc<Self> {
         let (client_sender, client_receiver) = mpsc::channel(16);
         let (terminal_event_sender, terminal_event_receiver) = mpsc::channel(64);
