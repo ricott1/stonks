@@ -9,7 +9,8 @@ use crate::{
     utils::{AgentId, AppResult},
 };
 use anyhow::anyhow;
-use crossterm::event::{KeyCode, KeyEvent};
+use ratatui::crossterm;
+use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, time::SystemTime};
 use strum::Display;

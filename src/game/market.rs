@@ -7,11 +7,11 @@ use super::{
 };
 use crate::{
     game::events::NightEvent,
-    utils::{load_stonks_data, AgentId, AppResult},
+    utils::{fresh_chacha_rng, load_stonks_data, AgentId, AppResult},
 };
 use anyhow::anyhow;
 use log::{debug, info};
-use rand::{seq::SliceRandom, Rng, SeedableRng};
+use rand::{seq::SliceRandom, RngExt};
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, IntoEnumIterator};
@@ -228,7 +228,7 @@ impl Market {
             let current_market_cap = self.total_market_cap() as f64;
             let mean = (self.target_total_market_cap as f64 - current_market_cap)
                 / current_market_cap.min(self.target_total_market_cap as f64);
-            let drift = (mean + rng.gen_range(-GLOBAL_DRIFT_VOLATILITY..GLOBAL_DRIFT_VOLATILITY))
+            let drift = (mean + rng.random_range(-GLOBAL_DRIFT_VOLATILITY..GLOBAL_DRIFT_VOLATILITY))
                 .min(MAX_GLOBAL_DRIFT)
                 .max(-MAX_GLOBAL_DRIFT);
 
@@ -271,7 +271,7 @@ impl Market {
                 stonk.allocated_shares
             );
         }
-        let rng = &mut ChaCha8Rng::from_entropy();
+        let rng = &mut fresh_chacha_rng();
         match self.phase {
             GamePhase::Day { cycle, counter } => {
                 self.tick_day(rng);
@@ -540,7 +540,7 @@ impl Market {
                         }
 
                         info!("Got events {:#?}", events);
-                        events.shuffle(&mut rand::thread_rng());
+                        events.shuffle(&mut rand::rng());
                         events = events
                             .iter()
                             .take(MAX_EVENTS_PER_NIGHT)
@@ -593,7 +593,7 @@ mod tests {
             );
         }
 
-        let rng = &mut ChaCha8Rng::from_entropy();
+        let rng = &mut fresh_chacha_rng();
         while market.last_tick < HISTORICAL_SIZE {
             market.tick_day(rng)
         }

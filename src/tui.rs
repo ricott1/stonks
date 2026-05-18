@@ -2,11 +2,11 @@ use crate::game::market::Market;
 use crate::ssh::SSHWriterProxy;
 use crate::ui;
 use crate::utils::{AgentId, AppResult};
-use crossterm::cursor::{Hide, Show};
-use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
-use crossterm::terminal::Clear;
-use crossterm::terminal::SetTitle;
-use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
+use ratatui::crossterm;
+use ratatui::crossterm::cursor::{Hide, Show};
+use ratatui::crossterm::event::{DisableMouseCapture, EnableMouseCapture};
+use ratatui::crossterm::terminal::Clear;
+use ratatui::crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::layout::Rect;
 use ratatui::prelude::CrosstermBackend;
 use ratatui::Terminal;
@@ -27,7 +27,6 @@ impl Tui {
             self.terminal.backend_mut(),
             EnterAlternateScreen,
             EnableMouseCapture,
-            SetTitle("Rebels in the sky"),
             Clear(crossterm::terminal::ClearType::All),
             Hide
         )?;

@@ -1,6 +1,6 @@
 use crate::ssh::utils::convert_data_to_crossterm_event;
 use crate::utils::AgentId;
-use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, MouseEvent};
+use ratatui::crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, MouseEvent};
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};

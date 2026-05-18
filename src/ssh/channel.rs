@@ -53,17 +53,18 @@ impl SSHWriterProxy {
             return Ok(0);
         }
 
-        let data_length = self.sink.len();
+        let frame = std::mem::take(&mut self.sink);
+        let data_length = frame.len();
 
-        if let Err(_) = self
+        if self
             .handle
-            .data(self.channel_id, self.sink.clone().into())
+            .data(self.channel_id, tokio_util::bytes::Bytes::from(frame))
             .await
+            .is_err()
         {
             let _ = self.handle.close(self.channel_id).await;
         }
 
-        self.sink.clear();
         self.flushing = false;
         Ok(data_length)
     }

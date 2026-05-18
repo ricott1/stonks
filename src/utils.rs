@@ -6,6 +6,8 @@ use image::imageops::resize;
 use image::ImageReader;
 use image::RgbaImage;
 use include_dir::{include_dir, Dir};
+use rand::SeedableRng;
+use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Cursor;
@@ -13,6 +15,10 @@ use std::path::PathBuf;
 
 pub type AppResult<T> = Result<T, anyhow::Error>;
 pub type AgentId = uuid::Uuid;
+
+pub fn fresh_chacha_rng() -> ChaCha8Rng {
+    ChaCha8Rng::from_rng(&mut rand::rng())
+}
 
 static ASSETS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/assets/");
 static MARKET_STORE_FILENAME: &'static str = "market.json";

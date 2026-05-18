@@ -8,13 +8,12 @@ use crate::ssh::utils::generate_user_id;
 use crate::tui::Tui;
 use crate::utils::*;
 use anyhow::{anyhow, Context};
-use async_trait::async_trait;
 use log::debug;
 use russh::Channel;
 use russh::Pty;
 use russh::{server::*, ChannelId};
-use russh_keys::HashAlg;
-use russh_keys::PublicKey;
+use russh::keys::HashAlg;
+use russh::keys::PublicKey;
 use sha2::Digest;
 use sha2::Sha256;
 use std::collections::HashMap;
@@ -59,7 +58,6 @@ impl AppClient {
     }
 }
 
-#[async_trait]
 impl Handler for AppClient {
     type Error = anyhow::Error;
 

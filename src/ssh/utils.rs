@@ -1,14 +1,15 @@
 use super::SSHEventHandler;
 use crate::utils::AppResult;
 use anyhow::anyhow;
-use crossterm::event::KeyModifiers;
-use rand::Rng;
-use rand_distr::Alphanumeric;
+use rand::distr::Alphanumeric;
+use rand::RngExt;
+use ratatui::crossterm;
+use ratatui::crossterm::event::KeyModifiers;
 
 pub type Password = [u8; 32];
 
 pub fn generate_user_id() -> String {
-    let buf_id = rand::thread_rng()
+    let buf_id = rand::rng()
         .sample_iter(&Alphanumeric)
         .take(8)
         .collect::<Vec<u8>>()

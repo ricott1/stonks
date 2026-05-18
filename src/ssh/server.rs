@@ -3,12 +3,14 @@ use crate::game::agent::UserAgent;
 use crate::game::market::{GamePhase, Market};
 use crate::ssh::TerminalEvent;
 use crate::tui::Tui;
-use crate::utils::{delete_all_data, load_market, save_agent, save_market, AgentId, AppResult};
-use crossterm::event::KeyCode;
+use crate::utils::{
+    delete_all_data, fresh_chacha_rng, load_market, save_agent, save_market, AgentId, AppResult,
+};
 use itertools::Either;
 use log::info;
-use rand::{RngCore, SeedableRng};
+use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
+use ratatui::crossterm::event::KeyCode;
 use russh::server::{self};
 use russh::server::{Config, Server};
 use std::collections::HashMap;
@@ -23,7 +25,7 @@ use tokio::task;
 use tokio::{select, time};
 use tokio_util::sync::CancellationToken;
 
-fn save_keys(signing_key: &russh_keys::PrivateKey) -> AppResult<()> {
+fn save_keys(signing_key: &russh::keys::PrivateKey) -> AppResult<()> {
     let file = File::create::<&str>("./keys".into())?;
     assert!(file.metadata()?.is_file());
     let mut buffer = std::io::BufWriter::new(file);
@@ -32,9 +34,9 @@ fn save_keys(signing_key: &russh_keys::PrivateKey) -> AppResult<()> {
     Ok(())
 }
 
-fn load_keys() -> AppResult<russh_keys::PrivateKey> {
+fn load_keys() -> AppResult<russh::keys::PrivateKey> {
     let bytes = std::fs::read("./keys")?;
-    let private_key = russh_keys::PrivateKey::from_bytes(&bytes)?;
+    let private_key = russh::keys::PrivateKey::from_bytes(&bytes)?;
     println!("Loaded keypair for SSH server.");
     Ok(private_key)
 }
@@ -65,9 +67,9 @@ impl AppServer {
         );
 
         let private_key = load_keys().unwrap_or_else(|_| {
-            let key = russh_keys::PrivateKey::random(
-                &mut ChaCha8Rng::from_entropy(),
-                russh_keys::Algorithm::Ed25519,
+            let key = russh::keys::PrivateKey::random(
+                &mut fresh_chacha_rng(),
+                russh::keys::Algorithm::Ed25519,
             )
             .expect("Failed to generate SSH keys.");
 
@@ -144,7 +146,7 @@ impl AppServer {
                 info!("Creating new market from scratch");
                 let mut m = Market::default();
                 let rng = &mut ChaCha8Rng::seed_from_u64(
-                    seed.unwrap_or(ChaCha8Rng::from_entropy().next_u64()),
+                    seed.unwrap_or_else(|| fresh_chacha_rng().next_u64()),
                 );
                 m.initialize(rng);
                 save_market(&m).expect("Could not save market");
