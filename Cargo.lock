@@ -1306,6 +1306,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
+name = "frittura-ssh-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "crossterm",
+ "log",
+ "rand 0.10.1",
+ "ratatui",
+ "russh",
+ "tokio",
+]
+
+[[package]]
 name = "fs_extra"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2192,11 +2205,10 @@ dependencies = [
 
 [[package]]
 name = "num-bigint-dig"
-version = "0.8.4"
+version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc84195820f291c7697304f3cbdadd1cb7199c0efc917ff5eafd71225c136151"
+checksum = "e661dda6640fad38e827a6d4a310ff4763082116fe217f279885c97f511bb0b7"
 dependencies = [
- "byteorder",
  "lazy_static",
  "libm",
  "num-integer",
@@ -3608,19 +3620,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sshhub"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "crossterm",
- "log",
- "rand 0.10.1",
- "ratatui",
- "russh",
- "tokio",
-]
-
-[[package]]
 name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3639,6 +3638,7 @@ dependencies = [
  "anyhow",
  "clap",
  "directories",
+ "frittura-ssh-core",
  "image",
  "include_dir",
  "itertools",
@@ -3653,7 +3653,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.8",
- "sshhub",
  "strum 0.28.0",
  "strum_macros 0.28.0",
  "tokio",
