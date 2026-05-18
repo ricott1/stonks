@@ -21,12 +21,12 @@ pub fn fresh_chacha_rng() -> ChaCha8Rng {
 }
 
 static ASSETS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/assets/");
-static MARKET_STORE_FILENAME: &'static str = "market.json";
+static MARKET_STORE_FILENAME: &str = "market.json";
 
 pub fn read_image(path: &str) -> AppResult<RgbaImage> {
     let file = ASSETS_DIR.get_file(path);
     if file.is_none() {
-        return Err(anyhow!("File {} not found", path).into());
+        return Err(anyhow!("File {} not found", path));
     }
     let img = ImageReader::new(Cursor::new(file.unwrap().contents()))
         .with_guessed_format()?
@@ -114,7 +114,7 @@ pub fn load_stonks_data() -> AppResult<[Stonk; NUMBER_OF_STONKS]> {
     let data = file
         .contents_utf8()
         .expect("Failed to read stonks data file");
-    let stonks = serde_json::from_str(&data)?;
+    let stonks = serde_json::from_str(data)?;
     Ok(stonks)
 }
 

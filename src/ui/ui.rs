@@ -19,7 +19,7 @@ use std::fmt::{self};
 
 use super::utils::{Carded, CARD_HEIGHT, CARD_WIDTH, UNSELECTED_CARD};
 
-const STONKS: [&'static str; 6] = [
+const STONKS: [&str; 6] = [
     "███████╗████████╗ ██████╗ ███╗   ██╗██╗  ██╗███████╗██╗",
     "██╔════╝╚══██╔══╝██╔═══██╗████╗  ██║██║ ██╔╝██╔════╝██║",
     "███████╗   ██║   ██║   ██║██╔██╗ ██║█████╔╝ ███████╗██║",
@@ -220,7 +220,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
     let mut rows = market
         .stonks
         .iter()
-        .filter(|stonk| stonk.historical_prices.len() > 0)
+        .filter(|stonk| !stonk.historical_prices.is_empty())
         .enumerate()
         .map(|(i, stonk)| {
             let color = match i % 2 {
@@ -275,7 +275,7 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
                 .iter()
                 .take(3)
                 .map(|(holder_id, amount)| {
-                    if let Some(agent) = market.agents.get(&holder_id) {
+                    if let Some(agent) = market.agents.get(holder_id) {
                         let agent_share = stonk.to_stake(*amount) * 100.0;
                         let agent_style = agent_share.ustyle();
                         Line::from(format!("{} {:.03}%", agent.username(), agent_share))
@@ -333,9 +333,9 @@ fn build_stonks_table<'a>(market: &Market, agent: &UserAgent, colors: TableColor
         .collect::<Vec<Line>>();
 
     let total_row = Row::new(vec![
-        Cell::new(format!("\nTotal")),
-        Cell::new(format!("\n")),
-        Cell::new(format!("\n")),
+        Cell::new("\nTotal".to_string()),
+        Cell::new("\n".to_string()),
+        Cell::new("\n".to_string()),
         Cell::new(format!("\n{:+.2}%", avg_today_variation)).style(avg_today_variation.style()),
         Cell::new(format!("\n{:+.2}%", avg_max_variation)).style(total_max_variation_style),
         Cell::new(format!("\n{:.03}%", avg_agent_share)).style(avg_agent_share.ustyle()),
@@ -479,31 +479,29 @@ fn render_night(
                             }),
                         );
                     }
+                } else if ui_options.selected_event_card_index == i {
+                    frame.render_widget(
+                        Paragraph::new(cards[CARD_ANIMATION_FRAMES - 1].clone())
+                            .block(Block::bordered().border_style(border_style)),
+                        cards_split[i].inner(Margin {
+                            horizontal: 1,
+                            vertical: 0,
+                        }),
+                    );
+                    frame.render_widget(
+                        Block::bordered()
+                            .border_style(border_style)
+                            .borders(Borders::RIGHT | Borders::LEFT),
+                        cards_split[i],
+                    );
                 } else {
-                    if ui_options.selected_event_card_index == i {
-                        frame.render_widget(
-                            Paragraph::new(cards[CARD_ANIMATION_FRAMES - 1].clone())
-                                .block(Block::bordered().border_style(border_style)),
-                            cards_split[i].inner(Margin {
-                                horizontal: 1,
-                                vertical: 0,
-                            }),
-                        );
-                        frame.render_widget(
-                            Block::bordered()
-                                .border_style(border_style)
-                                .borders(Borders::RIGHT | Borders::LEFT),
-                            cards_split[i],
-                        );
-                    } else {
-                        frame.render_widget(
-                            Paragraph::new(cards[CARD_ANIMATION_FRAMES - 1].clone()),
-                            cards_split[i].inner(Margin {
-                                horizontal: 2,
-                                vertical: 1,
-                            }),
-                        );
-                    }
+                    frame.render_widget(
+                        Paragraph::new(cards[CARD_ANIMATION_FRAMES - 1].clone()),
+                        cards_split[i].inner(Margin {
+                            horizontal: 2,
+                            vertical: 1,
+                        }),
+                    );
                 }
 
                 let title_style = if agent.selected_action().is_some()
@@ -571,16 +569,14 @@ pub(crate) fn render_stonk(
         .focus_on_stonk
         .expect("Focus_on_stonk should be some.");
     let stonk = &market.stonks[stonk_id];
-    let styles = vec![
-        Style::default().cyan(),
+    let styles = [Style::default().cyan(),
         Style::default().magenta(),
         Style::default().green(),
         Style::default().red(),
         Style::default().yellow(),
         Style::default().blue(),
         Style::default().white(),
-        Style::default().light_green(),
-    ];
+        Style::default().light_green()];
 
     let graph_width = area.width as usize - 5;
 
@@ -628,9 +624,6 @@ pub(crate) fn render_stonk(
         .style(styles[stonk.id])
         .data(&datas)];
 
-    let min_y_bound;
-    let max_y_bound;
-
     let min_price = datas
         .iter()
         .map(|(_, d)| *d as usize)
@@ -642,16 +635,16 @@ pub(crate) fn render_stonk(
         .max()
         .unwrap_or_default();
 
-    if min_price < 20 {
-        min_y_bound = 0;
+    let min_y_bound = if min_price < 20 {
+        0
     } else {
-        min_y_bound = min_price / 20 * 20 - 20;
-    }
-    if max_price < 20 {
-        max_y_bound = 40;
+        min_price / 20 * 20 - 20
+    };
+    let max_y_bound = if max_price < 20 {
+        40
     } else {
-        max_y_bound = max_price / 20 * 20 + 20 + max_price % 20;
-    }
+        max_price / 20 * 20 + 20 + max_price % 20
+    };
 
     let n_y_labels = area.height as usize / 6;
     let y_labels: Vec<Span<'static>> = (0..=n_y_labels)
@@ -786,7 +779,7 @@ fn render_footer(
 
     match market.phase {
         GamePhase::Day { .. } => {
-            if let Some(_) = ui_options.focus_on_stonk {
+            if ui_options.focus_on_stonk.is_some() {
                 lines.push(
                     format!(
                         "{:28} {:28} {:28}",

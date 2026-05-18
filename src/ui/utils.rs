@@ -23,15 +23,15 @@ pub static UNSELECTED_CARD: Lazy<Vec<Line>> = Lazy::new(|| {
 });
 
 pub trait Carded {
-    fn cards(&self) -> &Vec<Vec<Line>>;
+    fn cards(&self) -> &Vec<Vec<Line<'_>>>;
 }
 
 impl Carded for NightEvent {
-    fn cards(&self) -> &Vec<Vec<Line>> {
+    fn cards(&self) -> &Vec<Vec<Line<'_>>> {
         match self.rarity() {
-            EventRarity::Common => &*STONKS_CARDS,
-            EventRarity::Uncommon => &*DOGE_CARDS,
-            EventRarity::Rare => &*ELON_CARDS,
+            EventRarity::Common => &STONKS_CARDS,
+            EventRarity::Uncommon => &DOGE_CARDS,
+            EventRarity::Rare => &ELON_CARDS,
         }
     }
 }
@@ -101,7 +101,7 @@ pub fn image_to_lines<'a>(img: &RgbaImage) -> Vec<Line<'a>> {
     lines
 }
 
-pub fn image_to_cards(path: &str) -> Vec<Vec<Line>> {
+pub fn image_to_cards(path: &str) -> Vec<Vec<Line<'_>>> {
     let back_image = read_image(path).expect("Cannot load image from file");
     let back_lines = image_to_lines(&back_image);
     let front_image = read_image("images/card_front.png").expect("Cannot load image from file");

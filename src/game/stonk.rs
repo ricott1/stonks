@@ -216,8 +216,7 @@ impl Stonk {
                         .expect("Failed to sample tick distribution")
                         .sample(rng)
         }
-        .min(MAX_PRICE_DRIFT)
-        .max(-MAX_PRICE_DRIFT);
+        .clamp(-MAX_PRICE_DRIFT, MAX_PRICE_DRIFT);
 
         self.price_per_share_in_cents = ((self.price_per_share_in_cents as f64
             * (1.0 + price_drift)) as u32)

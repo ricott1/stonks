@@ -164,7 +164,7 @@ impl NightEvent {
         };
 
         let unlock_description = self.unlock_condition_description();
-        if unlock_description.len() > 0 {
+        if !unlock_description.is_empty() {
             description.push("".to_string());
             description.push("Unlock Condition:".to_string());
             for l in unlock_description.iter() {
@@ -173,7 +173,7 @@ impl NightEvent {
         }
 
         let cost_description = self.cost_description();
-        if cost_description.len() > 0 {
+        if !cost_description.is_empty() {
             description.push("".to_string());
             description.push("Cost:".to_string());
             for l in cost_description.iter() {
@@ -184,6 +184,7 @@ impl NightEvent {
         description
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn unlock_condition(
         &self,
     ) -> Box<dyn Fn(&dyn DecisionAgent, &[Stonk; NUMBER_OF_STONKS]) -> bool> {
@@ -273,7 +274,7 @@ impl NightEvent {
                 }
             }),
             Self::CharacterAssassination { agent_id, .. } => {
-                let agent_id = agent_id.clone();
+                let agent_id = *agent_id;
                 Box::new(move |agent, _| {
                     // let has_any_large_stake = agent_stonks
                     //     .iter()
@@ -305,7 +306,7 @@ impl NightEvent {
                 }
             }),
             Self::ReceiveDividends { stonk_id } => {
-                let stonk_id = stonk_id.clone();
+                let stonk_id = *stonk_id;
                 Box::new(move |agent, stonks| {
                     if agent.owned_stonks()[stonk_id] == 0 {
                         return false;
