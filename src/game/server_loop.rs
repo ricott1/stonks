@@ -78,7 +78,9 @@ pub fn spawn(
                         }
                     }
                     for client_id in to_remove {
-                        tuis.remove(&client_id);
+                        if let Some(tui) = tuis.remove(&client_id) {
+                            tui.close().await;
+                        }
                     }
                 }
 
@@ -91,7 +93,7 @@ pub fn spawn(
                     match event {
                         TerminalEvent::Key(key_event) => {
                             if key_event.code == KeyCode::Esc {
-                                remove_agent(&mut market, &mut tuis, client_id);
+                                remove_agent(&mut market, &mut tuis, client_id).await;
                             } else if let Some(agent) = market.agents.get_mut(&client_id) {
                                 agent.update_last_active_time();
                                 agent.handle_key_events(key_event, market.phase, &market.stonks);
@@ -99,9 +101,7 @@ pub fn spawn(
                             }
                         }
                         TerminalEvent::Quit => {
-                            // SSH channel closed; tear the agent down the same
-                            // way an explicit Esc would.
-                            remove_agent(&mut market, &mut tuis, client_id);
+                            remove_agent(&mut market, &mut tuis, client_id).await;
                         }
                         _ => {}
                     }
@@ -118,15 +118,19 @@ pub fn spawn(
         }
 
         save_market(&market).expect("Could not save market");
+
+        for (_, tui) in tuis.drain() {
+            tui.close().await;
+        }
     });
 }
 
-/// Disconnect `client_id` from the market and drop its `Tui` (whose `Drop`
-/// impl sends LeaveAlternateScreen + cleanup down the SSH channel).
-fn remove_agent(market: &mut Market, tuis: &mut HashMap<AgentId, Tui>, client_id: AgentId) {
+async fn remove_agent(market: &mut Market, tuis: &mut HashMap<AgentId, Tui>, client_id: AgentId) {
     market.remove_online_agent(client_id);
     if let Some(agent) = market.agents.get(&client_id) {
         let _ = save_agent(agent);
     }
-    tuis.remove(&client_id);
+    if let Some(tui) = tuis.remove(&client_id) {
+        tui.close().await;
+    }
 }

@@ -12,7 +12,9 @@ use crate::tui::Tui;
 use crate::utils::{load_agent, save_agent, AgentId};
 use anyhow::anyhow;
 use sha2::{Digest, Sha256};
-use frittura_ssh_core::{spawn_event_converter, Credential, SshGame, SshSession, TerminalEvent};
+use frittura_ssh_core::{
+    spawn_event_converter, Credential, HashAlg, SshGame, SshSession, TerminalEvent,
+};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -61,8 +63,8 @@ impl SshGame for StonksGame {
             Credential::Password(p) => hash_with_salt(&p, AUTH_PASSWORD_SALT),
             Credential::PublicKey(pk) => {
                 // Stonks identifies pubkey users by fingerprint hash, not
-                // by the openssh string - russh hands us the parsed key.
-                let fp = pk.fingerprint(russh::keys::HashAlg::default());
+                // by the openssh string.
+                let fp = pk.fingerprint(HashAlg::default());
                 hash_with_salt(&fp.to_string(), AUTH_PUBLIC_KEY_SALT)
             }
         };
