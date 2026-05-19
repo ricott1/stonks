@@ -2,23 +2,23 @@ use crate::game::market::Market;
 use crate::ui;
 use crate::utils::{AgentId, AppResult};
 use ratatui::crossterm;
-use ratatui::crossterm::cursor::{Hide, Show};
-use ratatui::crossterm::event::{DisableMouseCapture, EnableMouseCapture};
+use ratatui::crossterm::cursor::Hide;
+use ratatui::crossterm::event::EnableMouseCapture;
 use ratatui::crossterm::terminal::Clear;
-use ratatui::crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
+use ratatui::crossterm::terminal::EnterAlternateScreen;
 use ratatui::layout::Rect;
 use ratatui::prelude::CrosstermBackend;
 use ratatui::Terminal;
 use ratatui::TerminalOptions;
 use ratatui::Viewport;
-use frittura_ssh_core::SSHWriterProxy;
+use frittura_ssh_core::SshWriterProxy;
 
 pub const UI_SCREEN_SIZE: (u16, u16) = (160, 50);
 
 #[derive(Debug)]
 pub struct Tui {
     pub id: AgentId,
-    terminal: Terminal<CrosstermBackend<SSHWriterProxy>>,
+    terminal: Terminal<CrosstermBackend<SshWriterProxy>>,
 }
 
 impl Tui {
@@ -34,7 +34,12 @@ impl Tui {
         Ok(())
     }
 
-    pub fn new(id: AgentId, writer: SSHWriterProxy) -> AppResult<Self> {
+    /// Restore the terminal and close the SSH channel, awaited end-to-end.
+    pub async fn close(mut self) {
+        self.terminal.backend_mut().writer_mut().send_and_close().await;
+    }
+
+    pub fn new(id: AgentId, writer: SshWriterProxy) -> AppResult<Self> {
         let backend = CrosstermBackend::new(writer);
         let opts = TerminalOptions {
             viewport: Viewport::Fixed(Rect {
@@ -80,16 +85,3 @@ impl Tui {
     }
 }
 
-impl Drop for Tui {
-    fn drop(&mut self) {
-        let backend = self.terminal.backend_mut();
-        let _ = crossterm::execute!(
-            backend,
-            LeaveAlternateScreen,
-            DisableMouseCapture,
-            Clear(crossterm::terminal::ClearType::All),
-            Show
-        );
-        backend.writer_mut().send_and_close_in_background();
-    }
-}
