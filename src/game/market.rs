@@ -11,7 +11,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use log::{debug, info};
-use rand::{seq::SliceRandom, RngExt};
+use rand::seq::SliceRandom;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, IntoEnumIterator};
@@ -33,9 +33,13 @@ pub const NUMBER_OF_STONKS: usize = 8;
 
 const BRIBE_AMOUNT: u32 = 10_000 * 100;
 
-const MAX_GLOBAL_DRIFT: f64 = 0.25;
-const GLOBAL_DRIFT_VOLATILITY: f64 = 0.05;
-const GLOBAL_DRIFT_INTERVAL: usize = DAY_LENGTH;
+/// Per-tick log-cap pull toward the initial total market cap. Applied to
+/// every stonk equally so the total drifts back toward anchor while
+/// individual stonks remain free to move via their own Cauchy/Normal noise.
+const GLOBAL_REVERSION_RATE: f64 = 0.05;
+/// Safety clamp on the per-tick pull magnitude in case `current_cap`
+/// collapses near zero and `ln(anchor / current_cap)` blows up.
+const MAX_GLOBAL_PULL: f64 = 0.25;
 
 #[derive(Debug, Clone, Copy, Display, EnumIter)]
 enum Season {
@@ -223,30 +227,17 @@ impl Market {
         self.portfolios = portfolios;
     }
 
-    pub fn tick_day(&mut self, rng: &mut ChaCha8Rng) {
-        let global_drift = if self.last_tick.is_multiple_of(GLOBAL_DRIFT_INTERVAL) {
-            let current_market_cap = self.total_market_cap() as f64;
-            let mean = (self.target_total_market_cap as f64 - current_market_cap)
-                / current_market_cap.min(self.target_total_market_cap as f64);
-            let drift = (mean + rng.random_range(-GLOBAL_DRIFT_VOLATILITY..GLOBAL_DRIFT_VOLATILITY))
-                .clamp(-MAX_GLOBAL_DRIFT, MAX_GLOBAL_DRIFT);
-
-            info!(
-                "Global drift: current cap {}, target cap {}, global drift {}",
-                current_market_cap, self.target_total_market_cap, drift
-            );
-            Some(drift)
-        } else {
-            None
-        };
+    pub fn tick_day(&mut self, _rng: &mut ChaCha8Rng) {
+        let current_cap = self.total_market_cap() as f64;
+        let anchor = self.initial_total_market_cap as f64;
+        let global_pull = (GLOBAL_REVERSION_RATE * (anchor / current_cap.max(1.0)).ln())
+            .clamp(-MAX_GLOBAL_PULL, MAX_GLOBAL_PULL);
 
         for stonk in self.stonks.iter_mut() {
-            if let Some(drift) = global_drift {
-                stonk.add_condition(
-                    StonkCondition::Bump { amount: drift },
-                    self.last_tick + GLOBAL_DRIFT_INTERVAL,
-                );
-            }
+            stonk.add_condition(
+                StonkCondition::Bump { amount: global_pull },
+                self.last_tick + 1,
+            );
             stonk.tick(self.last_tick);
             while stonk.historical_prices.len() > HISTORICAL_SIZE {
                 stonk.historical_prices.remove(0);
