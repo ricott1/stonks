@@ -19,6 +19,11 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
+/// App-level idle kick. Longer than the per-game default since stonks
+/// players spend time reading market state between actions.
+const APP_IDLE_KICK: Duration = Duration::from_secs(120);
+const APP_IDLE_WARNING: Duration = Duration::from_secs(15);
+
 pub struct StonksGame {
     client_sender: mpsc::Sender<(Tui, UserAgent)>,
     terminal_event_sender: mpsc::Sender<(AgentId, TerminalEvent)>,
@@ -109,7 +114,8 @@ impl SshGame for StonksGame {
         // agent_id for the central task. Loop ends when the user
         // disconnects, at which point we drop out and the runtime closes
         // the channel.
-        let mut events = spawn_event_converter(data_rx, resize_rx);
+        let mut events =
+            spawn_event_converter(data_rx, resize_rx, Some(APP_IDLE_KICK), Some(APP_IDLE_WARNING));
         let tev_tx = self.terminal_event_sender.clone();
         while let Some(ev) = events.recv().await {
             // Central task may already be down on shutdown; nothing to do.

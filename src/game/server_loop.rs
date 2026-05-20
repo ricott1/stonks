@@ -49,6 +49,7 @@ pub fn spawn(
             m
         };
         let mut tuis: HashMap<AgentId, Tui> = HashMap::new();
+        let mut idle_warnings: HashMap<AgentId, u32> = HashMap::new();
         let mut update_ticker = tokio::time::interval(UPDATE_TIME_STEP);
         let mut draw_ticker = tokio::time::interval(DRAW_TIME_STEP);
 
@@ -71,13 +72,19 @@ pub fn spawn(
                     }
                     let mut to_remove = vec![];
                     for tui in tuis.values_mut() {
-                        tui.draw(&market, tui.id).expect("Can't draw tui");
+                        let warning = idle_warnings.get(&tui.id).copied();
+                        if let Err(e) = tui.draw(&market, tui.id, warning) {
+                            log::warn!("Error drawing tui {}: {e}", tui.id);
+                            to_remove.push(tui.id);
+                            continue;
+                        }
                         if let Err(e) = tui.push_data().await {
-                            log::warn!("Error pushing to tui: {e}");
+                            log::warn!("Error pushing to tui {}: {e}", tui.id);
                             to_remove.push(tui.id);
                         }
                     }
                     for client_id in to_remove {
+                        idle_warnings.remove(&client_id);
                         if let Some(tui) = tuis.remove(&client_id) {
                             tui.close().await;
                         }
@@ -92,16 +99,25 @@ pub fn spawn(
                 Some((client_id, event)) = terminal_event_receiver.recv() => {
                     match event {
                         TerminalEvent::Key(key_event) => {
+                            idle_warnings.remove(&client_id);
                             if key_event.code == KeyCode::Esc {
-                                remove_agent(&mut market, &mut tuis, client_id).await;
+                                remove_agent(&mut market, &mut tuis, &mut idle_warnings, client_id).await;
                             } else if let Some(agent) = market.agents.get_mut(&client_id) {
                                 agent.update_last_active_time();
                                 agent.handle_key_events(key_event, market.phase, &market.stonks);
-                                save_agent(agent).expect("Could not save agent");
+                                if let Err(e) = save_agent(agent) {
+                                    log::error!(
+                                        "Could not save agent {}: {e}",
+                                        agent.username()
+                                    );
+                                }
                             }
                         }
+                        TerminalEvent::IdleWarning(secs) => {
+                            idle_warnings.insert(client_id, secs);
+                        }
                         TerminalEvent::Quit => {
-                            remove_agent(&mut market, &mut tuis, client_id).await;
+                            remove_agent(&mut market, &mut tuis, &mut idle_warnings, client_id).await;
                         }
                         _ => {}
                     }
@@ -114,10 +130,14 @@ pub fn spawn(
         }
 
         for agent in market.agents.values() {
-            save_agent(agent).expect("Could not save agent");
+            if let Err(e) = save_agent(agent) {
+                log::error!("Shutdown save_agent failed for {}: {e}", agent.username());
+            }
         }
 
-        save_market(&market).expect("Could not save market");
+        if let Err(e) = save_market(&market) {
+            log::error!("Shutdown save_market failed: {e}");
+        }
 
         for (_, tui) in tuis.drain() {
             tui.close().await;
@@ -125,8 +145,14 @@ pub fn spawn(
     });
 }
 
-async fn remove_agent(market: &mut Market, tuis: &mut HashMap<AgentId, Tui>, client_id: AgentId) {
+async fn remove_agent(
+    market: &mut Market,
+    tuis: &mut HashMap<AgentId, Tui>,
+    idle_warnings: &mut HashMap<AgentId, u32>,
+    client_id: AgentId,
+) {
     market.remove_online_agent(client_id);
+    idle_warnings.remove(&client_id);
     if let Some(agent) = market.agents.get(&client_id) {
         let _ = save_agent(agent);
     }

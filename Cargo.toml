@@ -22,7 +22,7 @@ ratatui = { version = "0.30.0", features = ["unstable-backend-writer"] }
 serde = "1.0.228"
 serde_json = "1.0.149"
 sha2 = "0.10.8"
-frittura-ssh-core = "0.1"
+frittura-ssh-core = { path = "../frittura-ssh/crates/frittura-ssh-core" }
 strum = { version = "0.28.0", features = ["derive"] }
 strum_macros = "0.28.0"
 tokio = "1.52.3"
