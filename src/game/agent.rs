@@ -157,6 +157,16 @@ impl UserAgent {
         market_phase: GamePhase,
         stonks: &[Stonk; NUMBER_OF_STONKS],
     ) {
+        if key_event.code == KeyCode::Char('?') {
+            self.ui_options.show_help = !self.ui_options.show_help;
+            return;
+        }
+        if self.ui_options.show_help {
+            // Any other key dismisses the help overlay without taking effect.
+            self.ui_options.show_help = false;
+            return;
+        }
+
         let num_night_events = self.available_night_events().len();
 
         match key_event.code {

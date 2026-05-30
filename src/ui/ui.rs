@@ -11,8 +11,8 @@ use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::symbols::{self, border};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{
-    Axis, Block, Borders, Cell, Chart, Dataset, GraphType, HighlightSpacing, Paragraph, Row, Table,
-    TableState, Wrap,
+    Axis, Block, Borders, Cell, Chart, Clear, Dataset, GraphType, HighlightSpacing, Paragraph, Row,
+    Table, TableState, Wrap,
 };
 use ratatui::{layout::Layout, Frame};
 use std::fmt::{self};
@@ -167,6 +167,7 @@ pub struct UiOptions {
     pub(crate) zoom_level: ZoomLevel,
     pub render_counter: usize,
     pub selected_event_card_index: usize,
+    pub show_help: bool,
 }
 
 impl UiOptions {
@@ -858,6 +859,8 @@ fn render_footer(
         }
     }
 
+    lines.push(format!("{:28} {:28}", "`?`:help", "`Esc`:close help").into());
+
     frame.render_widget(Paragraph::new(lines), area);
 }
 
@@ -919,5 +922,63 @@ pub fn render(
         split[2].inner(Margin::new(1, 0)),
     );
 
+    if ui_options.show_help {
+        render_help_overlay(frame, area);
+    }
+
     Ok(())
+}
+
+fn render_help_overlay(frame: &mut Frame, area: Rect) {
+    let panel_w: u16 = 76;
+    let panel_h: u16 = 22;
+    let panel = Rect {
+        x: area.x + area.width.saturating_sub(panel_w) / 2,
+        y: area.y + area.height.saturating_sub(panel_h) / 2,
+        width: panel_w.min(area.width),
+        height: panel_h.min(area.height),
+    };
+    frame.render_widget(Clear, panel);
+
+    let lines: Vec<Line<'static>> = vec![
+        Line::from(Span::styled(
+            "Stonks - quick guide",
+            Style::default().fg(Color::Yellow).bold(),
+        ))
+        .centered(),
+        Line::from(""),
+        Line::from("Buy and sell shares to grow your portfolio. The current time"),
+        Line::from("is shown in the header (top line of the screen)."),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Day phase (06:00 - 24:00, 18 hours)",
+            Style::default().fg(Color::Cyan).bold(),
+        )),
+        Line::from("  ↑↓ select stonk    Enter focus / unfocus    z zoom chart"),
+        Line::from("  b/B/m buy 1 / 100 / max    s/S/d sell 1 / 100 / all"),
+        Line::from("  p portfolio view    l stonks view    c palette"),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Night phase (00:00 - 06:00, 6 hours)",
+            Style::default().fg(Color::Magenta).bold(),
+        )),
+        Line::from("  ←→ pick an event card    Enter confirm    Backspace cancel"),
+        Line::from("  Night events trigger bumps and crashes that play out next day."),
+        Line::from(""),
+        Line::from(Span::styled(
+            "press any key to close",
+            Style::default().fg(Color::DarkGray),
+        ))
+        .centered(),
+    ];
+
+    frame.render_widget(
+        Paragraph::new(lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" ? help ")
+                .border_style(Style::default().fg(Color::Yellow)),
+        ),
+        panel,
+    );
 }

@@ -206,14 +206,22 @@ impl Stonk {
             self.shock_probability
         };
         let price_drift = if rng.random_bool(shock_probability) {
-            Cauchy::new(self.drift, self.volatility)
-                .expect("Failed to sample tick distribution")
-                .sample(rng)
+            match Cauchy::new(self.drift, self.volatility.max(f64::MIN_POSITIVE)) {
+                Ok(dist) => dist.sample(rng),
+                Err(e) => {
+                    log::warn!(
+                        "Bad Cauchy params drift={} vol={}: {e}",
+                        self.drift,
+                        self.volatility
+                    );
+                    self.drift
+                }
+            }
         } else {
             self.drift
                 + self.volatility
                     * Normal::new(0.0, 1.0)
-                        .expect("Failed to sample tick distribution")
+                        .expect("Normal::new(0.0, 1.0) is always valid")
                         .sample(rng)
         }
         .clamp(-MAX_PRICE_DRIFT, MAX_PRICE_DRIFT);
